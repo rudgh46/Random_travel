@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>오늘의 랜덤 여행 · 서울고속버스터미널</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gothic+A1:wght@400;500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0c0f16;
+    --ink-2:#141926;
+    --panel:#0a0d14;
+    --amber:#ffb02e;
+    --amber-dim:#c9861f;
+    --paper:#f3ede0;
+    --paper-line:#d8cfbc;
+    --road:#e8eaf0;
+    --muted:#7d879c;
+    --go:#3ddc84;
+    --stub:#1b2130;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    font-family:'Gothic A1',sans-serif;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, #1a2233 0%, transparent 60%),
+      radial-gradient(900px 500px at 50% -8%, rgba(255,176,46,.10), transparent 60%),
+      var(--ink);
+    color:var(--road);
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:28px 18px 60px;
+    overflow-x:hidden;
+  }
+
+  /* ---- header / terminal marquee ---- */
+  header{width:100%;max-width:760px;text-align:center;margin-bottom:22px}
+  .eyebrow{
+    font-family:'Space Mono',monospace;
+    font-size:12px;letter-spacing:.34em;text-transform:uppercase;
+    color:var(--amber-dim);margin-bottom:14px;
+  }
+  h1{
+    font-family:'Black Han Sans',sans-serif;
+    font-weight:400;line-height:.98;
+    font-size:clamp(34px,8vw,58px);
+    color:var(--road);letter-spacing:-.01em;
+  }
+  h1 .hl{color:var(--amber);text-shadow:0 0 26px rgba(255,176,46,.35)}
+  .sub{
+    margin-top:12px;color:var(--muted);font-size:14px;font-weight:500;
+  }
+  .clockrow{
+    display:inline-flex;gap:10px;align-items:center;margin-top:16px;
+    font-family:'Space Mono',monospace;font-size:12.5px;color:var(--muted);
+    border:1px solid #222a3b;border-radius:999px;padding:7px 14px;background:rgba(255,255,255,.02);
+  }
+  .clockrow .dot{width:7px;height:7px;border-radius:50%;background:var(--go);box-shadow:0 0 8px var(--go);animation:pulse 1.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
+
+  /* ---- board ---- */
+  .board{
+    width:100%;max-width:760px;
+    background:linear-gradient(180deg,var(--ink-2),var(--panel));
+    border:1px solid #232c40;border-radius:18px;
+    box-shadow:0 30px 80px -30px rgba(0,0,0,.9), inset 0 1px 0 rgba(255,255,255,.03);
+    padding:26px 24px;
+  }
+  .board-top{
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.16em;
+    color:var(--amber-dim);text-transform:uppercase;
+    border-bottom:1px dashed #2a3348;padding-bottom:14px;margin-bottom:8px;
+  }
+  .board-top .lamp{display:inline-flex;align-items:center;gap:7px}
+  .board-top .lamp b{width:6px;height:6px;border-radius:50%;background:var(--amber);box-shadow:0 0 8px var(--amber);display:inline-block}
+
+  .display{
+    min-height:150px;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    text-align:center;padding:20px 4px 8px;
+  }
+  .prompt{color:var(--muted);font-size:15px;font-weight:500;max-width:360px}
+  .prompt .big{display:block;color:var(--road);font-family:'Black Han Sans',sans-serif;font-size:24px;margin-bottom:8px}
+  .flap{
+    font-family:'Black Han Sans',sans-serif;
+    font-size:clamp(44px,12vw,88px);line-height:1;
+    color:var(--amber);letter-spacing:.01em;
+    text-shadow:0 0 30px rgba(255,176,46,.4);
+    min-height:1.05em;
+  }
+  .flap.rolling{color:var(--road);text-shadow:none;opacity:.85}
+  .region-tag{
+    margin-top:14px;font-family:'Space Mono',monospace;font-size:12px;
+    letter-spacing:.18em;color:var(--amber-dim);text-transform:uppercase;
+    opacity:0;transition:opacity .4s ease .1s;
+  }
+  .region-tag.show{opacity:1}
+
+  /* ---- controls ---- */
+  .filters{
+    display:grid;grid-template-columns:repeat(3,1fr);gap:12px;
+    margin:22px 0 6px;
+  }
+  .filters label{
+    display:block;font-family:'Space Mono',monospace;font-size:10.5px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;
+  }
+  select{
+    width:100%;appearance:none;-webkit-appearance:none;
+    background:var(--ink) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%237d879c' stroke-width='1.6'><path d='M2 4l4 4 4-4'/></svg>") no-repeat right 12px center;
+    color:var(--road);border:1px solid #2a3348;border-radius:11px;
+    padding:11px 34px 11px 13px;font-family:'Gothic A1',sans-serif;font-size:14px;font-weight:500;
+    cursor:pointer;transition:border-color .15s;
+  }
+  select:hover{border-color:#3a4560}
+  select:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-color:var(--amber)}
+
+  .go-btn{
+    width:100%;margin-top:22px;
+    font-family:'Black Han Sans',sans-serif;font-size:22px;letter-spacing:.02em;
+    color:var(--ink);background:var(--amber);
+    border:none;border-radius:14px;padding:17px;cursor:pointer;
+    box-shadow:0 12px 30px -8px rgba(255,176,46,.55), inset 0 -3px 0 rgba(0,0,0,.18);
+    transition:transform .1s ease, box-shadow .2s, background .2s;
+  }
+  .go-btn:hover{background:#ffbe52}
+  .go-btn:active{transform:translateY(2px);box-shadow:0 6px 18px -8px rgba(255,176,46,.55), inset 0 -1px 0 rgba(0,0,0,.18)}
+  .go-btn:focus-visible{outline:3px solid #fff;outline-offset:3px}
+  .go-btn:disabled{opacity:.55;cursor:not-allowed;transform:none}
+
+  /* ---- boarding pass ---- */
+  .pass-wrap{width:100%;max-width:760px;margin-top:26px;
+    perspective:1200px;display:none}
+  .pass-wrap.show{display:block}
+  .pass{
+    display:grid;grid-template-columns:1fr 132px;
+    background:var(--paper);color:#2a2417;border-radius:16px;overflow:hidden;
+    box-shadow:0 40px 90px -30px rgba(0,0,0,.85);
+    transform-origin:top center;
+    animation:print .7s cubic-bezier(.2,.9,.25,1.05);
+  }
+  @keyframes print{
+    0%{transform:translateY(-38px) rotateX(-32deg);opacity:0}
+    100%{transform:none;opacity:1}
+  }
+  .pass-main{padding:22px 24px}
+  .pass-brand{
+    display:flex;justify-content:space-between;align-items:center;
+    font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.12em;
+    color:#8a7f63;text-transform:uppercase;border-bottom:1.5px solid var(--paper-line);
+    padding-bottom:12px;
+  }
+  .route{display:flex;align-items:center;gap:14px;margin:18px 0 6px}
+  .route .from,.route .to{display:flex;flex-direction:column}
+  .route .code{font-family:'Space Mono',monospace;font-size:11px;color:#9a8f70;letter-spacing:.1em}
+  .route .place{font-family:'Black Han Sans',sans-serif;font-size:23px;color:#201c12;line-height:1.1}
+  .route .to .place{color:#b8791a}
+  .route .arrow{flex:1;position:relative;height:2px;background:repeating-linear-gradient(90deg,#c3b79a,#c3b79a 6px,transparent 6px,transparent 11px)}
+  .route .arrow svg{position:absolute;right:-2px;top:50%;transform:translateY(-50%)}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px 10px;margin-top:20px}
+  .cell .k{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9a8f70;margin-bottom:4px}
+  .cell .v{font-size:17px;font-weight:700;color:#2a2417}
+  .cell .v small{font-weight:500;font-size:12.5px;color:#8a7f63}
+  .daytrip{margin-top:18px;display:inline-block;font-size:12.5px;font-weight:700;
+    padding:6px 12px;border-radius:8px;background:#2a2417;color:var(--paper)}
+
+  .stub{
+    background:var(--stub);color:var(--road);position:relative;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;
+    padding:20px 12px;text-align:center;
+  }
+  .stub::before{content:"";position:absolute;left:-9px;top:0;bottom:0;width:18px;
+    background:radial-gradient(circle at 0 9px, transparent 0 7px, var(--paper) 7px) 0 0/18px 18px repeat-y}
+  .stub .lbl{font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.14em;color:#7d879c;text-transform:uppercase}
+  .stub .price{font-family:'Black Han Sans',sans-serif;font-size:26px;color:var(--amber);line-height:1}
+  .stub .dur{font-family:'Space Mono',monospace;font-size:13px;color:var(--road)}
+
+  .pass-actions{display:flex;gap:12px;margin-top:20px;flex-wrap:wrap}
+  .pass-actions button, .pass-actions a{
+    flex:1;min-width:150px;text-align:center;text-decoration:none;
+    font-family:'Gothic A1',sans-serif;font-weight:700;font-size:14.5px;
+    padding:14px;border-radius:12px;cursor:pointer;transition:transform .1s,background .2s,border-color .2s;
+  }
+  .again{background:transparent;color:var(--road);border:1.5px solid #2a3348}
+  .again:hover{border-color:var(--amber);color:var(--amber)}
+  .again:active{transform:translateY(1px)}
+  .book{background:var(--road);color:var(--ink);border:1.5px solid var(--road)}
+  .book:hover{background:#fff}
+  .again:focus-visible,.book:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+  .empty{max-width:760px;width:100%;margin-top:22px;text-align:center;color:var(--muted);
+    border:1px dashed #2a3348;border-radius:14px;padding:26px;display:none}
+  .empty.show{display:block}
+  .empty b{color:var(--road);display:block;margin-bottom:6px;font-size:16px}
+
+  footer{margin-top:36px;color:#5b647a;font-size:12px;text-align:center;max-width:600px;line-height:1.6}
+  footer a{color:var(--amber-dim);text-decoration:none}
+  footer a:hover{text-decoration:underline}
+
+  @media (max-width:560px){
+    .filters{grid-template-columns:1fr 1fr}
+    .filters .col-dur{grid-column:1 / -1}
+    .pass{grid-template-columns:1fr}
+    .stub{flex-direction:row;justify-content:space-around;padding:16px}
+    .stub::before{left:0;top:-9px;right:0;bottom:auto;width:auto;height:18px;
+      background:radial-gradient(circle at 9px 0, transparent 0 7px, var(--paper) 7px) 0 0/18px 18px repeat-x}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .pass{animation:none}
+    .clockrow .dot{animation:none}
+  }
+</style>
+</head>
+<body>
+  <header>
+    <div class="eyebrow">서울고속버스터미널 · 경부영동선</div>
+    <h1>오늘, <span class="hl">어디로든</span><br>떠나볼까요</h1>
+    <p class="sub">버튼 한 번이면 목적지가 정해집니다. 고민은 안내판에 맡기세요.</p>
+    <div class="clockrow"><span class="dot"></span><span id="now">--:--</span><span>KST</span><span id="today"></span></div>
+  </header>
+
+  <main class="board" aria-live="polite">
+    <div class="board-top">
+      <span class="lamp"><b></b> Departures</span>
+      <span id="poolCount">전체 노선</span>
+    </div>
+    <div class="display">
+      <div class="prompt" id="prompt">
+        <span class="big">목적지 미정</span>
+        아래 조건을 고르고 <b style="color:var(--amber)">출발</b>을 누르면<br>랜덤으로 한 곳을 뽑아 드립니다.
+      </div>
+      <div class="flap" id="flap" style="display:none"></div>
+      <div class="region-tag" id="regionTag"></div>
+    </div>
+
+    <div class="filters">
+      <div>
+        <label for="region">권역</label>
+        <select id="region">
+          <option value="all">전체</option>
+          <option value="강원">강원 · 바다와 산</option>
+          <option value="충청·세종">충청 · 세종</option>
+          <option value="경북">경북 · 고도와 전통</option>
+          <option value="경남·부산">경남 · 부산</option>
+          <option value="수도권근교">수도권 근교</option>
+        </select>
+      </div>
+      <div>
+        <label for="budget">예산 (편도)</label>
+        <select id="budget">
+          <option value="999999">제한 없음</option>
+          <option value="10000">1만원 이하</option>
+          <option value="20000">2만원 이하</option>
+          <option value="30000">3만원 이하</option>
+        </select>
+      </div>
+      <div class="col-dur">
+        <label for="dur">소요시간</label>
+        <select id="dur">
+          <option value="999">상관 없음</option>
+          <option value="90">1시간 30분 이내</option>
+          <option value="150">2시간 30분 이내</option>
+          <option value="210">3시간 30분 이내</option>
+        </select>
+      </div>
+    </div>
+
+    <button class="go-btn" id="go">출발!</button>
+  </main>
+
+  <div class="pass-wrap" id="passWrap">
+    <div class="pass">
+      <div class="pass-main">
+        <div class="pass-brand"><span>Boarding Pass</span><span id="passNo">NO. ------</span></div>
+        <div class="route">
+          <div class="from"><span class="code">SEOUL · 서울고속</span><span class="place">서울</span></div>
+          <div class="arrow"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7h11M8 3l4 4-4 4" stroke="#b8791a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <div class="to"><span class="code" id="passRegionCode">DEST</span><span class="place" id="passPlace">—</span></div>
+        </div>
+        <div class="grid">
+          <div class="cell"><div class="k">Fare · 예상요금</div><div class="v" id="passFare">—</div></div>
+          <div class="cell"><div class="k">Time · 소요시간</div><div class="v" id="passDur">—</div></div>
+          <div class="cell"><div class="k">Grade · 등급</div><div class="v" id="passGrade">—</div></div>
+          <div class="cell"><div class="k">Region · 권역</div><div class="v" id="passRegion">—</div></div>
+        </div>
+        <span class="daytrip" id="passDaytrip">—</span>
+        <div class="pass-actions">
+          <button class="again" id="again">다시 뽑기</button>
+          <a class="book" id="book" href="https://www.kobus.co.kr" target="_blank" rel="noopener">코버스에서 예매</a>
+        </div>
+      </div>
+      <div class="stub">
+        <div><div class="lbl">Fare</div><div class="price" id="stubPrice">—</div></div>
+        <div><div class="lbl">Duration</div><div class="dur" id="stubDur">—</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="empty" id="empty">
+    <b>조건에 맞는 목적지가 없어요</b>
+    예산이나 소요시간 조건을 조금 풀어 보세요.
+  </div>
+
+  <footer>
+    요금은 우등·일반 기준 편도 예상값이며 날짜·좌석 등급에 따라 달라집니다.
+    센트럴시티(호남선) 노선은 별도 터미널이라 포함되지 않았습니다.
+    실제 출발편·잔여석은 <a href="https://www.kobus.co.kr" target="_blank" rel="noopener">코버스</a>에서 확인하세요.
+  </footer>
+
+<script>
+  // 서울고속버스터미널(경부·영동선) 실제 노선 데이터 — 우등/일반 편도 요금(원), 소요시간(분)
+  const DEST = [
+    {n:"강릉",   r:"강원",       fare:24600, dur:167, grade:"우등"},
+    {n:"속초",   r:"강원",       fare:22300, dur:155, grade:"우등"},
+    {n:"양양",   r:"강원",       fare:19900, dur:139, grade:"우등"},
+    {n:"동해",   r:"강원",       fare:27200, dur:187, grade:"우등"},
+    {n:"삼척",   r:"강원",       fare:29500, dur:196, grade:"우등"},
+    {n:"원주",   r:"강원",       fare:12400, dur:97,  grade:"우등"},
+    {n:"영월",   r:"강원",       fare:21200, dur:139, grade:"우등"},
+    {n:"정선",   r:"강원",       fare:25000, dur:176, grade:"우등"},
+    {n:"고한·사북",r:"강원",     fare:31400, dur:157, grade:"우등"},
+    {n:"문막",   r:"강원",       fare:11100, dur:82,  grade:"우등"},
+
+    {n:"대전",   r:"충청·세종",  fare:16600, dur:129, grade:"우등"},
+    {n:"세종",   r:"충청·세종",  fare:14400, dur:122, grade:"우등"},
+    {n:"온양·아산",r:"충청·세종", fare:10600, dur:92,  grade:"우등"},
+    {n:"공주",   r:"충청·세종",  fare:13700, dur:108, grade:"우등"},
+    {n:"금산",   r:"충청·세종",  fare:20400, dur:147, grade:"우등"},
+    {n:"유구",   r:"충청·세종",  fare:16300, dur:111, grade:"우등"},
+
+    {n:"동대구", r:"경북",       fare:30000, dur:227, grade:"우등"},
+    {n:"서대구", r:"경북",       fare:30000, dur:205, grade:"우등"},
+    {n:"구미",   r:"경북",       fare:25500, dur:179, grade:"우등"},
+    {n:"경주",   r:"경북",       fare:33600, dur:226, grade:"우등"},
+    {n:"안동",   r:"경북",       fare:24400, dur:164, grade:"우등"},
+    {n:"영주",   r:"경북",       fare:21200, dur:151, grade:"우등"},
+    {n:"예천",   r:"경북",       fare:24600, dur:160, grade:"우등"},
+    {n:"상주",   r:"경북",       fare:21100, dur:150, grade:"우등"},
+    {n:"점촌",   r:"경북",       fare:19000, dur:139, grade:"우등"},
+    {n:"영천",   r:"경북",       fare:20600, dur:209, grade:"일반"},
+    {n:"영덕",   r:"경북",       fare:35700, dur:217, grade:"우등"},
+    {n:"영해",   r:"경북",       fare:39000, dur:224, grade:"우등"},
+    {n:"울진",   r:"경북",       fare:38200, dur:218, grade:"우등"},
+    {n:"봉화",   r:"경북",       fare:24800, dur:152, grade:"우등"},
+
+    {n:"부산",   r:"경남·부산",  fare:39700, dur:259, grade:"우등"},
+    {n:"부산서부",r:"경남·부산", fare:40400, dur:272, grade:"우등"},
+    {n:"울산",   r:"경남·부산",  fare:38300, dur:264, grade:"우등"},
+    {n:"마산",   r:"경남·부산",  fare:36300, dur:247, grade:"우등"},
+    {n:"김해",   r:"경남·부산",  fare:39400, dur:268, grade:"우등"},
+    {n:"내서",   r:"경남·부산",  fare:36300, dur:238, grade:"우등"},
+
+    {n:"안성",   r:"수도권근교", fare:9400,  dur:63,  grade:"우등"},
+    {n:"용인",   r:"수도권근교", fare:3600,  dur:52,  grade:"일반"},
+    {n:"이천",   r:"수도권근교", fare:6300,  dur:73,  grade:"우등"},
+    {n:"여주",   r:"수도권근교", fare:7900,  dur:79,  grade:"우등"},
+    {n:"공도",   r:"수도권근교", fare:6700,  dur:64,  grade:"우등"},
+    {n:"신철원", r:"수도권근교", fare:11100, dur:95,  grade:"일반"},
+    {n:"동송",   r:"수도권근교", fare:13600, dur:106, grade:"일반"},
+    {n:"운천",   r:"수도권근교", fare:10000, dur:89,  grade:"일반"},
+  ];
+
+  const REGION_CODE = {
+    "강원":"GANGWON","충청·세종":"CHUNGCHEONG","경북":"GYEONGBUK",
+    "경남·부산":"GYEONGNAM","수도권근교":"METRO"
+  };
+  const REGION_VIBE = {
+    "강원":"바다와 산","충청·세종":"도심과 여유","경북":"고도·전통",
+    "경남·부산":"남쪽 끝, 바다","수도권근교":"가벼운 당일치기"
+  };
+
+  const $ = id => document.getElementById(id);
+  const won = n => n.toLocaleString('ko-KR') + "원";
+  const durText = m => { const h=Math.floor(m/60), mm=m%60; return [h?h+"시간":"", mm?mm+"분":""].filter(Boolean).join(" ") || "0분"; };
+  const prefersReduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  function pool(){
+    const reg = $('region').value, bud = +$('budget').value, dur = +$('dur').value;
+    return DEST.filter(d =>
+      (reg==='all' || d.r===reg) && d.fare<=bud && d.dur<=dur
+    );
+  }
+  function refreshCount(){
+    const p = pool();
+    $('poolCount').textContent = p.length + "개 노선 대기중";
+  }
+  ['region','budget','dur'].forEach(id => $(id).addEventListener('change', refreshCount));
+  refreshCount();
+
+  let rolling = false;
+  function spin(){
+    if(rolling) return;
+    const candidates = pool();
+    const emptyEl = $('empty'), passWrap = $('passWrap');
+    passWrap.classList.remove('show');
+    if(candidates.length===0){ emptyEl.classList.add('show'); return; }
+    emptyEl.classList.remove('show');
+
+    const pick = candidates[Math.floor(Math.random()*candidates.length)];
+    const flap = $('flap'), prompt = $('prompt'), tag = $('regionTag');
+    prompt.style.display='none'; flap.style.display='block';
+    tag.classList.remove('show');
+    $('go').disabled = true; rolling = true;
+
+    const land = () => {
+      flap.classList.remove('rolling');
+      flap.textContent = pick.n;
+      tag.textContent = pick.r + " · " + REGION_VIBE[pick.r];
+      tag.classList.add('show');
+      $('go').disabled = false; rolling = false;
+      $('go').textContent = "다시 출발!";
+      printPass(pick);
+    };
+
+    if(prefersReduce){ land(); return; }
+
+    flap.classList.add('rolling');
+    let ticks = 0;
+    const total = 22 + Math.floor(Math.random()*8);
+    const roll = () => {
+      const c = candidates.length>1 ? candidates : DEST;
+      flap.textContent = c[Math.floor(Math.random()*c.length)].n;
+      ticks++;
+      if(ticks>=total){ land(); return; }
+      const delay = ticks < total-6 ? 55 : 55 + (ticks-(total-6))*42; // ease-out
+      setTimeout(roll, delay);
+    };
+    roll();
+  }
+
+  function printPass(d){
+    const daytrip = d.dur<=150 ? "당일치기 좋아요"
+                  : d.dur<=210 ? "부지런하면 당일치기"
+                  : "1박 추천 코스";
+    $('passPlace').textContent = d.n;
+    $('passRegionCode').textContent = REGION_CODE[d.r] || "DEST";
+    $('passFare').innerHTML = won(d.fare) + " <small>/ "+d.grade+"</small>";
+    $('passDur').textContent = durText(d.dur);
+    $('passGrade').textContent = d.grade;
+    $('passRegion').textContent = d.r;
+    $('passDaytrip').textContent = daytrip;
+    $('stubPrice').textContent = won(d.fare);
+    $('stubDur').textContent = durText(d.dur);
+    $('passNo').textContent = "NO. " + String(Math.floor(Math.random()*900000)+100000);
+    const pw = $('passWrap');
+    pw.classList.add('show');
+    // re-trigger print animation
+    const pass = pw.querySelector('.pass');
+    if(!prefersReduce){ pass.style.animation='none'; void pass.offsetWidth; pass.style.animation=''; }
+    setTimeout(()=>pw.scrollIntoView({behavior:prefersReduce?'auto':'smooth', block:'nearest'}), 120);
+  }
+
+  $('go').addEventListener('click', spin);
+  $('again').addEventListener('click', spin);
+
+  // clock
+  function tick(){
+    const now = new Date();
+    const p = n => String(n).padStart(2,'0');
+    $('now').textContent = p(now.getHours())+":"+p(now.getMinutes());
+    const days=['일','월','화','수','목','금','토'];
+    $('today').textContent = "· "+(now.getMonth()+1)+"/"+now.getDate()+" ("+days[now.getDay()]+")";
+  }
+  tick(); setInterval(tick, 15000);
+</script>
+</body>
+</html>
