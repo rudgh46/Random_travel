@@ -92,6 +92,14 @@ async function callTago(op, params, key) {
     e.raw = text.slice(0, 500);
     throw e;
   }
+  // 게이트웨이 레벨 오류(서비스 경로/키 문제)는 여기로 온다
+  const gw = data?.OpenAPI_ServiceResponse?.cmmMsgHeader;
+  if (gw && gw.returnReasonCode && gw.returnReasonCode !== "00") {
+    const e = new Error(gw.returnAuthMsg || gw.errMsg || "게이트웨이 오류");
+    e.code = gw.returnReasonCode;
+    e.errMsg = gw.errMsg;
+    throw e;
+  }
   const items = data?.response?.body?.items?.item;
   const header = data?.response?.header;
   if (header && header.resultCode && header.resultCode !== "00") {
@@ -173,11 +181,13 @@ exports.handler = async (event) => {
     // ── 진단 모드: TAGO 원본 응답을 그대로 반환 ──
     if (p.debug === "1") {
       const op = p.op || OP_TERMINALS;
+      const { debug: _d, op: _o, mode: _m, ...extra } = p;
       const qs = new URLSearchParams({
         serviceKey: normalizeKey(key),
         _type: "json",
         numOfRows: p.numOfRows || "10",
         pageNo: "1",
+        ...extra,
       });
       const url = `${SERVICE_BASE}/${op}?${qs.toString()}`;
       const ctrl = new AbortController();
