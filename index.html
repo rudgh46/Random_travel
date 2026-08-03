@@ -6,12 +6,12 @@
 <title>오늘의 랜덤 여행 · 서울고속버스터미널</title>
 <meta name="description" content="서울고속버스터미널(경부·영동선)과 센트럴시티(호남선)에서 출발하는 랜덤 여행지를 뽑아 드립니다. 예상 요금·소요시간과 근처 볼거리까지 한 번에.">
 <meta name="theme-color" content="#0c0f16">
-<!-- 공유 미리보기(og:image)는 절대 URL이 가장 안전합니다.
-     배포 도메인이 정해지면 아래 og:image 를 https://<도메인>/og.png 로 바꿔 주세요. -->
 <meta property="og:type" content="website">
+<meta property="og:url" content="https://randomtago.netlify.app/">
+<meta property="og:site_name" content="오늘의 랜덤 여행">
 <meta property="og:title" content="오늘의 랜덤 여행 🚌">
 <meta property="og:description" content="버튼 한 번이면 목적지가 정해집니다. 고민은 안내판에 맡기세요.">
-<meta property="og:image" content="/og.png">
+<meta property="og:image" content="https://randomtago.netlify.app/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
@@ -191,6 +191,14 @@
     padding:3px 8px;border-radius:6px;margin-right:8px}
   .live b{color:#b8791a}
   .live.loading{color:#8a7f63}
+
+  .weather{margin-top:14px;padding-top:12px;border-top:1px dashed var(--paper-line);
+    font-size:13px;color:#443c28;line-height:1.5}
+  .weather.loading{color:#8a7f63}
+  .weather b{color:#b8791a}
+  .wbadge{display:inline-block;font-size:12px;font-weight:700;color:#2a2417;
+    background:rgba(184,121,26,.16);border:1px solid rgba(184,121,26,.35);
+    padding:2px 9px;border-radius:6px;margin-right:8px}
 
   .stub{
     background:var(--stub);color:var(--road);position:relative;
@@ -387,6 +395,7 @@
           <div class="cell"><div class="k">Region · 권역</div><div class="v" id="passRegion">—</div></div>
         </div>
         <span class="daytrip" id="passDaytrip">—</span>
+        <div class="weather" id="passWeather" hidden></div>
         <div class="live" id="passLive" hidden></div>
         <div class="pass-actions">
           <button class="again" id="again">다시 뽑기</button>
@@ -424,6 +433,7 @@
     경부·영동선과 호남선(센트럴시티) 두 터미널을 모두 포함합니다.
     요금은 우등 기준 편도 예상값이며 날짜·좌석 등급에 따라 달라집니다.
     실제 출발편·잔여석은 <a href="https://www.kobus.co.kr" target="_blank" rel="noopener">코버스</a>에서 확인하세요.
+    날씨는 <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> 자료입니다.
   </footer>
 
 <script>
@@ -610,6 +620,39 @@
     "유성·대전":[["유성온천 족욕체험장","온천 지구 무료 족욕","온천"],["국립중앙과학관","체험형 전시와 천체관","문화"],["한밭수목원","도심 속 대형 수목원","자연"],["계족산 황톳길","맨발 걷기 코스","자연"]],
   };
 
+  // 목적지 좌표 [위도, 경도] — 날씨 조회용. 시·군(또는 해당 읍) 중심 기준이며
+  // 날씨는 수 km 차이가 의미 없으므로 소수 4자리로 충분하다.
+  const COORD = {
+    "강릉":[37.7519,128.8761],"속초":[38.2070,128.5918],"양양":[38.0754,128.6190],
+    "동해":[37.5247,129.1143],"삼척":[37.4500,129.1655],"원주":[37.3422,127.9202],
+    "영월":[37.1836,128.4617],"정선":[37.3806,128.6608],"고한·사북":[37.2110,128.8280],
+    "문막":[37.3170,127.8140],
+    "대전":[36.3504,127.3845],"세종":[36.4801,127.2890],"온양·아산":[36.7830,127.0043],
+    "공주":[36.4465,127.1190],"금산":[36.1089,127.4880],"유구":[36.5560,127.0080],
+    "동대구":[35.8797,128.6285],"서대구":[35.8720,128.5560],"구미":[36.1195,128.3446],
+    "경주":[35.8562,129.2247],"안동":[36.5684,128.7294],"영주":[36.8056,128.6240],
+    "예천":[36.6577,128.4527],"상주":[36.4109,128.1590],"점촌":[36.5866,128.1866],
+    "영천":[35.9733,128.9386],"영덕":[36.4150,129.3656],"영해":[36.5390,129.4130],
+    "울진":[36.9930,129.4004],"봉화":[36.8930,128.7325],
+    "부산":[35.1796,129.0756],"부산서부":[35.1560,128.9800],"울산":[35.5384,129.3114],
+    "마산":[35.2085,128.5730],"김해":[35.2285,128.8894],"내서":[35.2320,128.5150],
+    "안성":[37.0080,127.2797],"용인":[37.2411,127.1776],"이천":[37.2721,127.4350],
+    "여주":[37.2982,127.6370],"공도":[37.0080,127.1780],"신철원":[38.1470,127.3130],
+    "동송":[38.2070,127.2170],"운천":[38.1100,127.3150],
+    "광주":[35.1595,126.8526],"전주":[35.8242,127.1480],"목포":[34.8118,126.3922],
+    "순천":[34.9506,127.4874],"여수":[34.7604,127.6622],"남원":[35.4164,127.3905],
+    "정읍":[35.5699,126.8560],"익산":[35.9483,126.9578],"군산":[35.9676,126.7368],
+    "담양":[35.3212,126.9882],"광양":[34.9407,127.5960],"순창":[35.3744,127.1376],
+    "장흥":[34.6816,126.9070],"보성":[34.7714,127.0800],"해남":[34.5735,126.5990],
+    "완도":[34.3110,126.7550],"진도":[34.4867,126.2635],"영광":[35.2772,126.5120],
+    "화순":[35.0645,126.9866],"무안":[34.9900,126.4817],"부안":[35.7317,126.7330],
+    "김제":[35.8034,126.8809],
+    "당진":[36.8894,126.6280],"서산":[36.7848,126.4503],"태안":[36.7456,126.2980],
+    "보령":[36.3330,126.6128],"홍성":[36.6013,126.6608],"예산":[36.6809,126.8450],
+    "안면도":[36.5100,126.3350],"논산":[36.1872,127.0987],"청주":[36.6424,127.4890],
+    "충주":[36.9910,127.9260],"유성·대전":[36.3620,127.3560],
+  };
+
   const $ = id => document.getElementById(id);
   const won = n => n.toLocaleString('ko-KR') + "원";
 
@@ -668,6 +711,81 @@
       el.hidden = true;                        // 프록시 없거나 실패 → 기본값 카드 유지
     }
   }
+  // ── 목적지 날씨 (Open-Meteo · 인증키 불필요, CORS 허용) ──
+  // WMO weather code → 아이콘·설명
+  const WMO = [
+    [[0],"☀️","맑음"], [[1],"🌤","대체로 맑음"], [[2],"⛅","구름 조금"], [[3],"☁️","흐림"],
+    [[45,48],"🌫","안개"], [[51,53,55],"🌦","이슬비"], [[56,57],"🌧","얼어붙는 비"],
+    [[61,63,65],"🌧","비"], [[66,67],"🌧","얼어붙는 비"], [[71,73,75],"❄️","눈"],
+    [[77],"🌨","진눈깨비"], [[80,81,82],"🌦","소나기"], [[85,86],"🌨","소나기눈"],
+    [[95],"⛈","뇌우"], [[96,99],"⛈","우박 뇌우"],
+  ];
+  const wmo = code => {
+    const hit = WMO.find(([codes]) => codes.includes(code));
+    return hit ? { icon: hit[1], label: hit[2] } : { icon: "🌡", label: "날씨" };
+  };
+
+  const WX_TTL = 30 * 60 * 1000;   // 같은 목적지를 다시 뽑아도 30분간 재요청하지 않는다
+  const wxCache = new Map();
+
+  function renderWeather(el, w){
+    const parts = [];
+    if(w.now != null)  parts.push(`지금 <b>${w.now}°</b>`);
+    if(w.min != null && w.max != null) parts.push(`${w.min}° / ${w.max}°`);
+    if(w.pop != null)  parts.push(`강수확률 <b>${w.pop}%</b>`);
+    if(w.pop != null && w.pop >= 60) parts.push("우산 챙기세요");
+    el.className = 'weather';
+    el.innerHTML = `<span class="wbadge">${w.icon} 오늘 ${w.label}</span>${parts.join(' · ')}`;
+  }
+
+  async function fetchWeather(dest, seq){
+    const el = $('passWeather');
+    const c = COORD[dest.n];
+    if(!el) return;
+    if(!c){ el.hidden = true; return; }
+
+    const cached = wxCache.get(dest.n);
+    if(cached && Date.now() - cached.at < WX_TTL){
+      el.hidden = false;
+      renderWeather(el, cached.w);
+      return;
+    }
+
+    el.hidden = false;
+    el.className = 'weather loading';
+    el.textContent = '목적지 날씨 확인 중…';
+    try{
+      const url = "https://api.open-meteo.com/v1/forecast"
+        + `?latitude=${c[0]}&longitude=${c[1]}`
+        + "&current=temperature_2m,weather_code"
+        + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+        + "&timezone=Asia%2FSeoul&forecast_days=1";
+      const res = await fetch(url);
+      if(!res.ok) throw new Error('weather http ' + res.status);
+      const d = await res.json();
+      if(seq !== liveSeq) return;                 // 더 최근 뽑기가 있으면 버린다
+
+      const day = d.daily || {}, cur = d.current || {};
+      // 최저/최고·강수확률이 모두 '오늘' 값이므로 상태 배지도 일별 코드를 쓴다.
+      // (현재 코드를 쓰면 "맑음 · 강수확률 82%" 같은 모순이 생긴다)
+      const code = (day.weather_code && day.weather_code[0] != null) ? day.weather_code[0]
+                 : (cur.weather_code != null ? cur.weather_code : null);
+      const r = round => (round == null ? null : Math.round(round));
+      const w = {
+        ...wmo(code),
+        now: r(cur.temperature_2m),
+        min: r(day.temperature_2m_min && day.temperature_2m_min[0]),
+        max: r(day.temperature_2m_max && day.temperature_2m_max[0]),
+        pop: day.precipitation_probability_max ? day.precipitation_probability_max[0] : null,
+      };
+      wxCache.set(dest.n, { at: Date.now(), w });
+      renderWeather(el, w);
+    }catch(e){
+      if(seq !== liveSeq) return;
+      el.hidden = true;                            // 조용히 감춘다 (없어도 카드는 완성돼 있다)
+    }
+  }
+
   const durText = m => { const h=Math.floor(m/60), mm=m%60; return [h?h+"시간":"", mm?mm+"분":""].filter(Boolean).join(" ") || "0분"; };
   const prefersReduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -754,8 +872,9 @@
 
   function printPass(d){
     const seq = ++liveSeq;
-    const liveEl = $('passLive');
+    const liveEl = $('passLive'), wxEl = $('passWeather');
     if (liveEl) liveEl.hidden = true;
+    if (wxEl) wxEl.hidden = true;
     const daytrip = d.dur<=150 ? "당일치기 좋아요"
                   : d.dur<=210 ? "부지런하면 당일치기"
                   : "1박 추천 코스";
@@ -776,6 +895,7 @@
     const pass = pw.querySelector('.pass');
     if(!prefersReduce){ pass.style.animation='none'; void pass.offsetWidth; pass.style.animation=''; }
     setTimeout(()=>pw.scrollIntoView({behavior:prefersReduce?'auto':'smooth', block:'nearest'}), 120);
+    fetchWeather(d, seq);
     fetchLive(d, seq);
   }
 
