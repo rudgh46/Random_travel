@@ -136,6 +136,23 @@
   select:hover{border-color:#3a4560}
   select:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-color:var(--amber)}
 
+  /* ---- 출발 일시 ---- */
+  .depart{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+  .depart label{
+    display:block;font-family:'Space Mono',monospace;font-size:10.5px;
+    letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;
+  }
+  .depart input{
+    width:100%;background:var(--ink);color:var(--road);
+    border:1px solid #2a3348;border-radius:11px;
+    padding:10px 13px;font-family:'Gothic A1',sans-serif;font-size:14px;font-weight:500;
+    color-scheme:dark;                      /* 날짜·시각 피커도 어두운 테마로 */
+    transition:border-color .15s;
+  }
+  .depart input:hover{border-color:#3a4560}
+  .depart input:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-color:var(--amber)}
+  .depart .note{grid-column:1/-1;font-size:11.5px;color:var(--muted);line-height:1.5}
+
   /* ---- 날씨 필터 ---- */
   .wxfilter{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px}
   .wxtoggle{
@@ -196,6 +213,16 @@
   .route .to .place{color:#b8791a}
   .route .arrow{flex:1;position:relative;height:2px;background:repeating-linear-gradient(90deg,#c3b79a,#c3b79a 6px,transparent 6px,transparent 11px)}
   .route .arrow svg{position:absolute;right:-2px;top:50%;transform:translateY(-50%)}
+  .sched{
+    margin-top:16px;padding:11px 13px;border-radius:11px;
+    background:rgba(42,36,23,.05);border:1px solid var(--paper-line);
+    display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+    font-size:14px;font-weight:700;color:#2a2417;
+  }
+  .sched .t{font-family:'Space Mono',monospace;font-size:17px;color:#b8791a;letter-spacing:.02em}
+  .sched .arrow{color:#9a8f70}
+  .sched .day{font-weight:700;color:#2a2417}
+  .sched .est{font-weight:500;color:#8a7f63;font-size:12px;margin-left:auto}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:16px 10px;margin-top:20px}
   .cell .k{font-family:'Space Mono',monospace;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:#9a8f70;margin-bottom:4px}
   .cell .v{font-size:17px;font-weight:700;color:#2a2417}
@@ -395,6 +422,18 @@
       </div>
     </div>
 
+    <div class="depart">
+      <div>
+        <label for="depDate">출발일</label>
+        <input type="date" id="depDate">
+      </div>
+      <div>
+        <label for="depTime">출발 시각</label>
+        <input type="time" id="depTime" step="1800">
+      </div>
+      <p class="note" id="depNote">날씨 예보는 오늘부터 15일 뒤까지 조회할 수 있어요.</p>
+    </div>
+
     <div class="wxfilter">
       <label class="wxtoggle" for="dryOnly">
         <input type="checkbox" id="dryOnly">
@@ -415,6 +454,7 @@
           <div class="arrow"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7h11M8 3l4 4-4 4" stroke="#b8791a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <div class="to"><span class="code" id="passRegionCode">DEST</span><span class="place" id="passPlace">—</span></div>
         </div>
+        <div class="sched" id="passSched"></div>
         <div class="grid">
           <div class="cell"><div class="k">Fare · 예상요금</div><div class="v" id="passFare">—</div></div>
           <div class="cell"><div class="k">Time · 소요시간</div><div class="v" id="passDur">—</div></div>
@@ -690,11 +730,55 @@
   const DEP_HINT = { gb: "서울경부", hn: "센트럴시티,서울호남" };
   let liveSeq = 0; // 오래된 응답이 최신 카드를 덮어쓰지 않도록
 
-  const yyyymmdd = () => {
-    const d = new Date();
-    const p = n => String(n).padStart(2, '0');
-    return "" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate());
-  };
+  // ── 출발 일시 ──
+  // Open-Meteo 예보 범위가 오늘 + 15일이라 선택 가능 범위도 여기에 맞춘다.
+  const WX_MAX_AHEAD = 15;
+  const pad = n => String(n).padStart(2, '0');
+  const DAY_KO = ['일','월','화','수','목','금','토'];
+  const isoOf = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+  const todayIso = () => isoOf(new Date());
+  const parseIso = iso => { const [y,m,d] = iso.split('-').map(Number); return new Date(y, m - 1, d); };
+  const fmtDateKo = iso => { const d = parseIso(iso); return `${d.getMonth()+1}/${d.getDate()}(${DAY_KO[d.getDay()]})`; };
+
+  const depDateVal = () => $('depDate').value || todayIso();
+  const depTimeVal = () => $('depTime').value || "09:00";
+
+  // TAGO 는 YYYYMMDD 를 쓴다
+  const yyyymmdd = () => depDateVal().replace(/-/g, '');
+
+  // 출발 일시 + 소요시간 → 도착 시각 (자정을 넘기면 며칠 뒤인지 함께 돌려준다)
+  function arrivalOf(iso, hm, durMin){
+    const [y, m, d] = iso.split('-').map(Number);
+    const [hh, mi]  = hm.split(':').map(Number);
+    const dep = new Date(y, m - 1, d, hh, mi);
+    const arr = new Date(dep.getTime() + durMin * 60000);
+    const dayDiff = Math.round((parseIso(isoOf(arr)) - parseIso(isoOf(dep))) / 86400000);
+    return { arr, hm: `${pad(arr.getHours())}:${pad(arr.getMinutes())}`, dayDiff };
+  }
+
+  function renderSchedule(d){
+    const el = $('passSched');
+    if(!el) return;
+    const iso = depDateVal(), hm = depTimeVal();
+    const a = arrivalOf(iso, hm, d.dur);
+    const nextDay = a.dayDiff > 0 ? `<span class="day">${a.dayDiff === 1 ? '익일' : `+${a.dayDiff}일`}</span> ` : '';
+    el.innerHTML = `<span class="day">${fmtDateKo(iso)}</span>`
+      + `<span class="t">${hm}</span><span class="arrow">→</span>${nextDay}<span class="t">${a.hm}</span>`
+      + `<span class="est">도착 예정 · ${durText(d.dur)}</span>`;
+  }
+
+  // 선택 가능 범위를 세팅하고 기본값(오늘 · 다음 30분 단위)을 채운다
+  function initDepart(){
+    const now = new Date();
+    const max = new Date(now.getTime() + WX_MAX_AHEAD * 86400000);
+    $('depDate').min = todayIso();
+    $('depDate').max = isoOf(max);
+    if(!$('depDate').value) $('depDate').value = todayIso();
+    if(!$('depTime').value){
+      const slot = new Date(Math.ceil(now.getTime() / (30 * 60000)) * 30 * 60000);
+      $('depTime').value = `${pad(slot.getHours())}:${pad(slot.getMinutes())}`;
+    }
+  }
   const hhmm = s => (s && s.length >= 12) ? s.slice(8, 10) + ":" + s.slice(10, 12) : (s || "");
 
   async function fetchLive(dest, seq) {
@@ -752,8 +836,9 @@
     return hit ? { icon: hit[1], label: hit[2] } : { icon: "🌡", label: "날씨" };
   };
 
-  const WX_TTL = 30 * 60 * 1000;   // 같은 목적지를 다시 뽑아도 30분간 재요청하지 않는다
-  const wxCache = new Map();
+  const WX_TTL = 30 * 60 * 1000;   // 같은 목적지·날짜는 30분간 재요청하지 않는다
+  const wxCache = new Map();       // "목적지|YYYY-MM-DD" → { at, w }
+  const wxKey = (name, iso) => name + "|" + iso;
   const WX_URL = "https://api.open-meteo.com/v1/forecast";
   const WX_DAILY = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max";
   const WET_CODES  = [51,53,55,56,57,61,63,65,66,67,80,81,82,95,96,99];
@@ -800,57 +885,61 @@
     return "무난한 날씨예요. 걷기 좋겠어요.";
   }
 
-  function renderWeather(el, w, dest){
+  function renderWeather(el, w, dest, iso){
+    const today = iso === todayIso();
     const parts = [];
-    if(w.now != null)  parts.push(`지금 <b>${w.now}°</b>`);
+    if(today && w.now != null) parts.push(`지금 <b>${w.now}°</b>`);   // 미래 날짜엔 '지금'이 의미 없다
     if(w.min != null && w.max != null) parts.push(`${w.min}° / ${w.max}°`);
     if(w.pop != null)  parts.push(`강수확률 <b>${w.pop}%</b>`);
     if(w.pop != null && w.pop >= 60) parts.push("우산 챙기세요");
     el.className = 'weather';
-    el.innerHTML = `<span class="wbadge">${w.icon} 오늘 ${w.label}</span>${parts.join(' · ')}`
+    el.innerHTML = `<span class="wbadge">${w.icon} ${today ? '오늘' : fmtDateKo(iso)} ${w.label}</span>`
+                 + parts.join(' · ')
                  + `<span class="wxtip">${weatherTip(w, dest)}</span>`;
   }
 
   // ── 전국 배치 조회 ──
   // Open-Meteo 는 좌표를 콤마로 이어 붙이면 한 번의 요청으로 여러 지점을 돌려준다.
   // "비 안 오는 곳만" 필터는 후보 전체의 강수확률이 필요하므로 이걸 쓴다.
-  let wxAllAt = 0, wxAllPending = null;
+  const wxAllAt = new Map();        // "YYYY-MM-DD" → 마지막 배치 시각
+  const wxAllPending = new Map();   // "YYYY-MM-DD" → 진행 중 Promise
 
-  function fetchAllWeather(){
-    if(Date.now() - wxAllAt < WX_TTL) return Promise.resolve(true);
-    if(wxAllPending) return wxAllPending;                  // 중복 클릭 시 요청 합치기
+  function fetchAllWeather(iso){
+    if(Date.now() - (wxAllAt.get(iso) || 0) < WX_TTL) return Promise.resolve(true);
+    if(wxAllPending.has(iso)) return wxAllPending.get(iso);   // 중복 클릭 시 요청 합치기
 
     const names = Object.keys(COORD);
     const url = WX_URL
       + "?latitude="  + names.map(n => COORD[n][0]).join(",")
       + "&longitude=" + names.map(n => COORD[n][1]).join(",")
-      + "&current=temperature_2m,weather_code"
+      + (iso === todayIso() ? "&current=temperature_2m,weather_code" : "")
       + "&daily=" + WX_DAILY
-      + "&timezone=Asia%2FSeoul&forecast_days=1";
+      + `&timezone=Asia%2FSeoul&start_date=${iso}&end_date=${iso}`;
 
-    wxAllPending = (async () => {
+    const job = (async () => {
       try{
         const res = await fetch(url);
         if(!res.ok) throw new Error('weather http ' + res.status);
         const arr = await res.json();
         if(!Array.isArray(arr) || arr.length !== names.length) throw new Error('배치 응답 형태가 예상과 다름');
         const at = Date.now();
-        arr.forEach((r, i) => wxCache.set(names[i], { at, w: toW(r) }));
-        wxAllAt = at;
+        arr.forEach((r, i) => wxCache.set(wxKey(names[i], iso), { at, w: toW(r) }));
+        wxAllAt.set(iso, at);
         return true;
       }catch(e){
         return false;
       }finally{
-        wxAllPending = null;
+        wxAllPending.delete(iso);
       }
     })();
-    return wxAllPending;
+    wxAllPending.set(iso, job);
+    return job;
   }
 
   // 강수확률이 이 값 미만이면 '비 안 오는 곳'으로 본다.
   const DRY_MAX = 50;
-  function isDry(d){
-    const c = wxCache.get(d.n);
+  function isDry(d, iso){
+    const c = wxCache.get(wxKey(d.n, iso));
     if(!c) return true;                    // 모르는 곳은 배제하지 않는다
     return c.w.pop == null || c.w.pop < DRY_MAX;
   }
@@ -860,11 +949,12 @@
     const c = COORD[dest.n];
     if(!el) return;
     if(!c){ el.hidden = true; return; }
+    const iso = depDateVal();
 
-    const cached = wxCache.get(dest.n);
+    const cached = wxCache.get(wxKey(dest.n, iso));
     if(cached && Date.now() - cached.at < WX_TTL){
       el.hidden = false;
-      renderWeather(el, cached.w, dest);
+      renderWeather(el, cached.w, dest, iso);
       return;
     }
 
@@ -874,17 +964,17 @@
     try{
       const url = WX_URL
         + `?latitude=${c[0]}&longitude=${c[1]}`
-        + "&current=temperature_2m,weather_code"
+        + (iso === todayIso() ? "&current=temperature_2m,weather_code" : "")
         + "&daily=" + WX_DAILY
-        + "&timezone=Asia%2FSeoul&forecast_days=1";
+        + `&timezone=Asia%2FSeoul&start_date=${iso}&end_date=${iso}`;
       const res = await fetch(url);
       if(!res.ok) throw new Error('weather http ' + res.status);
       const d = await res.json();
       if(seq !== liveSeq) return;                 // 더 최근 뽑기가 있으면 버린다
 
       const w = toW(d);
-      wxCache.set(dest.n, { at: Date.now(), w });
-      renderWeather(el, w, dest);
+      wxCache.set(wxKey(dest.n, iso), { at: Date.now(), w });
+      renderWeather(el, w, dest, iso);
     }catch(e){
       if(seq !== liveSeq) return;
       el.hidden = true;                            // 조용히 감춘다 (없어도 카드는 완성돼 있다)
@@ -896,10 +986,10 @@
 
   function pool(){
     const term = $('term').value, reg = $('region').value, bud = +$('budget').value, dur = +$('dur').value;
-    const dry = $('dryOnly').checked;
+    const dry = $('dryOnly').checked, iso = depDateVal();
     return DEST.filter(d =>
       (term==='all' || d.t===term) && (reg==='all' || d.r===reg) && d.fare<=bud && d.dur<=dur
-      && (!dry || isDry(d))
+      && (!dry || isDry(d, iso))
     );
   }
   function refreshCount(){
@@ -934,29 +1024,48 @@
 
   FILTER_IDS.forEach(id => $(id).addEventListener('change', () => { refreshCount(); saveFilters(); }));
   restoreFilters();
+  initDepart();
   refreshCount();
 
-  // "비 안 오는 곳만" — 켤 때 전국 날씨를 한 번에 받아 후보를 걸러낸다.
+  // "비 안 오는 곳만" — 켤 때(또는 날짜가 바뀔 때) 그 날짜의 전국 날씨를 한 번에 받아 걸러낸다.
   // 날씨는 계속 바뀌므로 이 조건만 일부러 저장하지 않는다(들어올 때마다 새로 판단).
-  $('dryOnly').addEventListener('change', async () => {
+  async function applyDryFilter(){
     const box = $('dryOnly'), st = $('wxStatus');
     if(!box.checked){ st.textContent = ''; refreshCount(); return; }
 
-    st.textContent = '전국 날씨 확인 중…';
+    const iso = depDateVal();
+    st.textContent = '날씨 확인 중…';
     box.disabled = true;
-    const okAll = await fetchAllWeather();
+    const okAll = await fetchAllWeather(iso);
     box.disabled = false;
 
+    if(iso !== depDateVal()) return;          // 기다리는 동안 날짜가 또 바뀌었으면 버린다
     if(!okAll){
       box.checked = false;
       st.textContent = '날씨를 불러오지 못했어요. 이 조건은 잠시 후 다시 시도해 주세요.';
       refreshCount();
       return;
     }
-    const wet = DEST.filter(d => !isDry(d)).length;
-    st.textContent = wet ? `강수확률 ${DRY_MAX}% 이상 ${wet}곳 제외` : '오늘은 전국에 비 예보가 없어요';
+    const wet = DEST.filter(d => !isDry(d, iso)).length;
+    const when = iso === todayIso() ? '오늘' : fmtDateKo(iso);
+    st.textContent = wet ? `${when} 강수확률 ${DRY_MAX}% 이상 ${wet}곳 제외`
+                         : `${when}은 전국에 비 예보가 없어요`;
     refreshCount();
+  }
+  $('dryOnly').addEventListener('change', applyDryFilter);
+
+  // 날짜·시각을 바꾸면 카드를 다시 그리지 않고 해당 줄만 갱신한다(인쇄 애니메이션 재생 방지)
+  function updateForDateTime(){
+    if(!currentPick) return;
+    renderSchedule(currentPick);
+    fetchWeather(currentPick, ++liveSeq);
+  }
+  $('depDate').addEventListener('change', () => {
+    initDepart();                 // 빈 값으로 지워졌을 때 기본값 복구
+    updateForDateTime();
+    applyDryFilter();
   });
+  $('depTime').addEventListener('change', () => { initDepart(); updateForDateTime(); });
 
   let rolling = false;
   function spin(){
@@ -1015,6 +1124,7 @@
     $('passGrade').textContent = d.grade;
     $('passRegion').textContent = d.r;
     $('passDaytrip').textContent = daytrip;
+    renderSchedule(d);
     $('stubPrice').textContent = won(d.fare);
     $('stubDur').textContent = durText(d.dur);
     $('passNo').textContent = "NO. " + String(Math.floor(Math.random()*900000)+100000);
@@ -1161,15 +1271,21 @@
   }
 
   // ── 공유 ──
+  // 목적지 + 출발 일시를 링크에 담는다
+  function shareQuery(pick){
+    return "?to=" + encodeURIComponent(pick.n)
+         + "&d=" + depDateVal()
+         + "&t=" + encodeURIComponent(depTimeVal());
+  }
   function shareUrl(pick){
     const base = (location.origin && location.origin !== 'null')
       ? location.origin + location.pathname
       : location.href.split('?')[0];
-    return base + "?to=" + encodeURIComponent(pick.n);
+    return base + shareQuery(pick);
   }
   function syncUrl(pick){
-    // 주소창을 결과와 맞춰 두면 새로고침·주소 복사로도 같은 목적지가 열린다.
-    try{ history.replaceState(null, '', location.pathname + "?to=" + encodeURIComponent(pick.n)); }
+    // 주소창을 결과와 맞춰 두면 새로고침·주소 복사로도 같은 결과가 열린다.
+    try{ history.replaceState(null, '', location.pathname + shareQuery(pick)); }
     catch(e){ /* file:// 등에서는 무시 */ }
   }
 
@@ -1215,13 +1331,26 @@
   }
   tick(); setInterval(tick, 15000);
 
-  // ── 공유 링크로 들어온 경우 그 목적지를 바로 보여준다 (?to=강릉) ──
+  // ── 공유 링크로 들어온 경우 바로 보여준다 (?to=강릉&d=2026-08-08&t=09:00) ──
   (function initFromUrl(){
-    let to;
-    try{ to = new URLSearchParams(location.search).get('to'); }catch(e){ return; }
+    let q;
+    try{ q = new URLSearchParams(location.search); }catch(e){ return; }
+    const to = q.get('to');
     if(!to) return;
     const d = DEST.find(x => x.n === to);
-    if(d){ remember(d); showResult(d); }
+    if(!d) return;
+
+    // 날짜·시각은 형식과 허용 범위를 검증한 뒤에만 반영한다.
+    // 시=00~23, 분=00~59 까지 확인한다(\d{2}:\d{2} 만 보면 "99:99" 가 통과해
+    // 브라우저가 값을 거부하고 입력칸이 빈 상태로 남는다).
+    const date = q.get('d'), time = q.get('t');
+    const el = $('depDate');
+    if(date && /^\d{4}-\d{2}-\d{2}$/.test(date) && date >= el.min && date <= el.max) el.value = date;
+    if(time && /^([01]\d|2[0-3]):[0-5]\d$/.test(time)) $('depTime').value = time;
+    initDepart();                       // 값이 비어 있으면 기본값으로 되돌린다
+
+    remember(d);
+    showResult(d);
   })();
 </script>
 </body>
