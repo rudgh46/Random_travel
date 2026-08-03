@@ -14,7 +14,7 @@
 //   getExpBusGradList                고속버스 등급 목록
 //   getCtyCodeList                   도시코드 목록
 
-const SERVICE_BASE = "http://apis.data.go.kr/1613000/ExpBusInfoService";
+const SERVICE_BASE = "https://apis.data.go.kr/1613000/ExpBusInfoService";
 const OP_TERMINALS = "getExpBusTrminlList";
 const OP_ROUTE = "getStrtpntAlocFndExpbusInfo";
 
@@ -48,8 +48,23 @@ async function callTago(op, params, key) {
     ...params,
   });
   const url = `${SERVICE_BASE}/${op}?${qs.toString()}`;
-  const res = await fetch(url);
-  const text = await res.text();
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 8000);
+  let res, text;
+  try {
+    res = await fetch(url, { signal: ctrl.signal });
+    text = await res.text();
+  } catch (err) {
+    const e = new Error(
+      err.name === "AbortError"
+        ? "TAGO 응답이 8초 내에 오지 않았습니다(타임아웃)."
+        : "TAGO 호출 실패: " + err.message
+    );
+    e.code = err.name;
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
   // 공공데이터포털은 오류 시 XML을 반환하기도 하므로 방어적으로 파싱
   let data;
   try {
