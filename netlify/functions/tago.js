@@ -57,15 +57,22 @@ const json = (statusCode, body) => ({
   body: JSON.stringify(body),
 });
 
+// 요청 URL 조립: serviceKey는 이미 인코딩된 값이므로 그대로 붙이고
+// 나머지 파라미터만 encodeURIComponent 처리한다(이중 인코딩/키 유실 방지).
+function buildUrl(base, op, key, params) {
+  const extra = Object.entries(params)
+    .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+    .join("&");
+  return `${base}/${op}?serviceKey=${key}${extra ? "&" + extra : ""}`;
+}
+
 async function callTago(op, params, key) {
-  const qs = new URLSearchParams({
-    serviceKey: normalizeKey(key),
+  const url = buildUrl(SERVICE_BASE, op, key, {
     _type: "json",
     numOfRows: "200",
     pageNo: "1",
     ...params,
   });
-  const url = `${SERVICE_BASE}/${op}?${qs.toString()}`;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 8000);
   let res, text;
@@ -140,14 +147,24 @@ exports.handler = async (event) => {
   const p = event.queryStringParameters || {};
 
   try {
+    // ── 키 점검: 값은 노출하지 않고 존재/길이/형태만 ──
+    if (p.keycheck === "1") {
+      const nk = normalizeKey(key);
+      return json(200, {
+        hasKey: !!key,
+        rawLen: key ? key.length : 0,
+        normLen: nk ? nk.length : 0,
+        rawHasPercent: key ? key.includes("%") : false,
+        head: key ? key.slice(0, 4) : null,
+        tail: key ? key.slice(-4) : null,
+      });
+    }
     // ── 탐색 모드: 서비스/오퍼레이션 후보를 자동 시험 ──
     if (p.probe === "1") {
-      const nkey = normalizeKey(key);
       const results = [];
       for (const base of PROBE_BASES) {
         for (const op of PROBE_OPS) {
-          const qs = new URLSearchParams({ serviceKey: nkey, _type: "json", numOfRows: "1", pageNo: "1" });
-          const url = `${base}/${op}?${qs.toString()}`;
+          const url = buildUrl(base, op, key, { _type: "json", numOfRows: "1", pageNo: "1" });
           const ctrl = new AbortController();
           const timer = setTimeout(() => ctrl.abort(), 6000);
           let note;
@@ -182,14 +199,12 @@ exports.handler = async (event) => {
     if (p.debug === "1") {
       const op = p.op || OP_TERMINALS;
       const { debug: _d, op: _o, mode: _m, ...extra } = p;
-      const qs = new URLSearchParams({
-        serviceKey: normalizeKey(key),
+      const url = buildUrl(SERVICE_BASE, op, key, {
         _type: "json",
         numOfRows: p.numOfRows || "10",
         pageNo: "1",
         ...extra,
       });
-      const url = `${SERVICE_BASE}/${op}?${qs.toString()}`;
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 8000);
       let raw;
