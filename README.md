@@ -5,9 +5,20 @@
 **출발!** 을 누르면 안내판이 돌아가다 목적지에서 멈추고, 탑승권 카드에
 예상 요금·소요시간·등급·당일치기 여부를 보여줍니다.
 
+목적지가 정해지면 안내판의 지명(또는 **근처 볼거리 보기** 버튼)을 눌러
+그 지역의 볼거리를 펼쳐 볼 수 있습니다. 카드를 누르면 네이버 지도 검색으로
+이어집니다. 77개 목적지 전체에 대해 내장 데이터로 동작하며 별도 API 키가 필요 없습니다.
+
 Netlify에 배포하면 TAGO(공공데이터포털) API로 **오늘 실제 출발편·요금**을
 탑승권에 실시간으로 얹습니다. 프록시가 없으면(로컬·GitHub Pages 등)
 정적 예상값으로 조용히 동작합니다.
+
+> **알려진 이슈 (2026-08-03 확인).** TAGO 고속버스정보 API는 현재 제공기관 측
+> 문제로 호출되지 않습니다. 게이트웨이 인증은 통과하지만(`X-RateLimit` 헤더 정상)
+> 백엔드가 `{"resultCode":"01","resultMsg":"serviceKey: 서비스키는 필수입니다."}` 를
+> 반환합니다. 게이트웨이가 `serviceKey` 를 소비한 뒤 백엔드로 전달하지 않는 것으로
+> 보이며, 클라이언트에서 우회할 방법은 없습니다. 이 경우 탑승권의 실시간 줄은
+> 숨겨지고 내장 예상값만 표시됩니다.
 
 ## 구조
 
@@ -24,7 +35,9 @@ netlify/functions/tago.js     TAGO 프록시 (API 키를 서버에만 보관)
 3. 빌드 설정은 비워두면 됩니다 (`netlify.toml`이 publish=`.`, functions 경로를 지정)
 4. **Site settings → Environment variables** 에 API 키 등록
    - Key: `TAGO_KEY`
-   - Value: 공공데이터포털에서 발급받은 **Decoding(일반 인증키, 디코딩)** 값
+   - Value: 공공데이터포털의 **Encoding(일반 인증키, 인코딩)** 값 권장
+     (`%2B`, `%2F`, `%3D` 가 포함된 형태. 게이트웨이는 이 형태를 인식합니다.
+     디코딩 키를 넣어도 함수가 `encodedKey()` 로 보정하지만, 인코딩 키가 안전합니다.)
 5. 배포 후 함수는 `/api/tago` 로 호출됩니다.
 
 > 키는 서버(함수)에서만 읽고 브라우저로는 절대 내려보내지 않습니다.
@@ -36,11 +49,25 @@ netlify/functions/tago.js     TAGO 프록시 (API 키를 서버에만 보관)
 - 노선 운행정보(이름→ID 자동 해석):
   `/api/tago?mode=route&depHint=서울경부&arr=목포&date=YYYYMMDD`
 - 통과 프록시(원하는 오퍼레이션 직접 호출):
-  `/api/tago?op=getExpBusTrminlList&numOfRows=1000`
+  `/api/tago?op=GetExpBusTrminlList&numOfRows=1000`
+- 진단용
+  - `?keycheck=1` 환경변수에 키가 들어왔는지(길이·공백 여부만, 값은 노출 안 함)
+  - `?debug=1&op=...` TAGO 원본 응답 그대로 보기
+  - `?showurl=1` 함수가 만드는 실제 요청 URL 확인
+  - `?probe=1` 서비스/오퍼레이션 후보 자동 탐색
 
-오퍼레이션 정확한 이름은 공공데이터포털
-**국토교통부_(TAGO)_고속버스정보**(data.go.kr/data/15098522) 상세 페이지에서
-확인할 수 있습니다. 함수의 `ALLOWED_OPS` 화이트리스트에 추가하면 통과 프록시로 쓸 수 있습니다.
+현재 살아있는 오퍼레이션은 4종이며 **첫 글자가 대문자**입니다.
+
+```
+GetExpBusTrminlList            고속버스 터미널 목록 (terminalNm 부분일치 검색)
+GetStrtpntAlocFndExpbusInfo    출/도착지 기반 운행정보
+GetExpBusGradList              등급 목록
+GetCtyCodeList                 도시코드 목록
+```
+
+베이스 URL은 `https://apis.data.go.kr/1613000/ExpBusInfo` 입니다.
+구 경로(`ExpBusInfoService/getExpBusTrminlList`)는 폐기되어 `NO_OPENAPI_SERVICE` 를 반환합니다.
+다른 오퍼레이션을 통과 프록시로 쓰려면 함수의 `ALLOWED_OPS` 화이트리스트에 추가하세요.
 
 ## 로컬 실행
 
@@ -49,7 +76,7 @@ netlify/functions/tago.js     TAGO 프록시 (API 키를 서버에만 보관)
 
 ```
 npm i -g netlify-cli
-export TAGO_KEY="발급받은_디코딩_키"
+export TAGO_KEY="발급받은_인코딩_키"
 netlify dev
 ```
 
@@ -58,3 +85,8 @@ netlify dev
 경부·영동선 + 호남선(센트럴시티) 총 77개 대표 노선의 우등 기준 편도
 예상 요금·소요시간을 내장했습니다. 실제 출발편·잔여석은 코버스(kobus.co.kr)에서
 확인하세요. TAGO API는 배차·요금 정보를 제공하며, 실시간 잔여석·예매는 포함되지 않습니다.
+
+볼거리 데이터는 `index.html` 의 `SPOTS` 객체에 목적지명을 키로 두고
+`[이름, 한줄설명, 분류]` 형태로 들어 있습니다. 지도 검색어는 읍·면 단위 터미널명을
+`SEARCH_CITY` 로 시·군 이름으로 바꿔서 만듭니다(예: 운천 → 포천).
+키가 없는 목적지는 자동으로 지도 검색 카드(관광지·맛집·카페·전통시장)로 대체됩니다.

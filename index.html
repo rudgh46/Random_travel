@@ -200,6 +200,59 @@
   .book:hover{background:#fff}
   .again:focus-visible,.book:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
 
+  /* ---- 근처 볼거리 ---- */
+  .flap.clickable{cursor:pointer;border-radius:14px;transition:transform .12s ease}
+  .flap.clickable:hover{transform:translateY(-2px)}
+  .flap.clickable:focus-visible{outline:3px solid var(--amber);outline-offset:8px}
+  .spot-hint{
+    margin-top:13px;display:none;align-items:center;gap:6px;
+    font-family:'Gothic A1',sans-serif;font-size:12.5px;font-weight:700;
+    color:var(--amber-dim);background:transparent;border:1px solid #3a4560;
+    border-radius:999px;padding:7px 15px;cursor:pointer;
+    transition:border-color .15s,color .15s;
+  }
+  .spot-hint.show{display:inline-flex}
+  .spot-hint:hover{border-color:var(--amber);color:var(--amber)}
+  .spot-hint:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+
+  .spots{
+    width:100%;max-width:760px;margin-top:18px;display:none;
+    background:var(--paper);color:#2a2417;border-radius:16px;padding:20px 22px;
+    box-shadow:0 30px 70px -30px rgba(0,0,0,.8);
+  }
+  .spots.show{display:block;animation:print .5s cubic-bezier(.2,.9,.25,1.05)}
+  .spots-head{
+    display:flex;justify-content:space-between;align-items:center;gap:12px;
+    border-bottom:1.5px solid var(--paper-line);padding-bottom:12px;
+  }
+  .spots-head h2{font-family:'Black Han Sans',sans-serif;font-weight:400;font-size:19px;color:#201c12}
+  .spots-head h2 span{color:#b8791a}
+  .spots-close{
+    background:transparent;border:1px solid var(--paper-line);color:#8a7f63;
+    border-radius:8px;width:30px;height:30px;flex:none;cursor:pointer;font-size:13px;line-height:1;
+  }
+  .spots-close:hover{border-color:#b8791a;color:#b8791a}
+  .spots-close:focus-visible{outline:2px solid #b8791a;outline-offset:2px}
+  .spots-list{list-style:none;display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px}
+  .spots-list a{
+    display:block;text-decoration:none;color:inherit;height:100%;
+    border:1px solid var(--paper-line);border-radius:11px;padding:11px 13px;
+    transition:border-color .15s,background .15s;
+  }
+  .spots-list a:hover{border-color:#b8791a;background:rgba(184,121,26,.07)}
+  .spots-list a:focus-visible{outline:2px solid #b8791a;outline-offset:2px}
+  .spots-list .sn{display:flex;align-items:center;font-weight:700;font-size:14.5px;color:#201c12}
+  .spots-list .sd{font-size:12.5px;color:#6b6248;margin-top:3px;line-height:1.45}
+  .spots-list .tag{
+    font-family:'Space Mono',monospace;font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;
+    color:#8a7f63;border:1px solid var(--paper-line);border-radius:5px;
+    padding:1px 5px;margin-left:7px;flex:none;
+  }
+  .spots-note{margin-top:14px;font-size:12.5px;color:#6b6248;line-height:1.5}
+  .spots-foot{margin-top:14px;padding-top:12px;border-top:1px dashed var(--paper-line);font-size:13px}
+  .spots-foot a{color:#b8791a;font-weight:700;text-decoration:none}
+  .spots-foot a:hover{text-decoration:underline}
+
   .empty{max-width:760px;width:100%;margin-top:22px;text-align:center;color:var(--muted);
     border:1px dashed #2a3348;border-radius:14px;padding:26px;display:none}
   .empty.show{display:block}
@@ -211,6 +264,7 @@
 
   @media (max-width:560px){
     .filters{grid-template-columns:1fr 1fr}
+    .spots-list{grid-template-columns:1fr}
     .pass{grid-template-columns:1fr}
     .stub{flex-direction:row;justify-content:space-around;padding:16px}
     .stub::before{left:0;top:-9px;right:0;bottom:auto;width:auto;height:18px;
@@ -218,6 +272,8 @@
   }
   @media (prefers-reduced-motion:reduce){
     .pass{animation:none}
+    .spots.show{animation:none}
+    .flap.clickable:hover{transform:none}
     .clockrow .dot{animation:none}
   }
 </style>
@@ -242,6 +298,9 @@
       </div>
       <div class="flap" id="flap" style="display:none"></div>
       <div class="region-tag" id="regionTag"></div>
+      <button class="spot-hint" id="spotHint" type="button" aria-controls="spots" aria-expanded="false">
+        근처 볼거리 보기
+      </button>
     </div>
 
     <div class="filters">
@@ -317,6 +376,20 @@
       </div>
     </div>
   </div>
+
+  <section class="spots" id="spots" aria-labelledby="spotsTitle">
+    <div class="spots-head">
+      <h2 id="spotsTitle"><span id="spotsPlace">—</span> 근처 볼거리</h2>
+      <button class="spots-close" id="spotsClose" type="button" aria-label="볼거리 닫기">✕</button>
+    </div>
+    <ul class="spots-list" id="spotsList"></ul>
+    <p class="spots-note" id="spotsNote" hidden>
+      아직 정리된 볼거리가 없는 곳이에요. 아래 검색으로 둘러보세요.
+    </p>
+    <div class="spots-foot">
+      <a id="spotsMore" href="https://map.naver.com" target="_blank" rel="noopener">지도에서 더 찾아보기 →</a>
+    </div>
+  </section>
 
   <div class="empty" id="empty">
     <b>조건에 맞는 목적지가 없어요</b>
@@ -431,6 +504,88 @@
     "전라":"남도 맛과 정취","충청 서해안":"서해안과 온천"
   };
 
+  // 목적지별 근처 볼거리 — [이름, 한줄설명, 분류]
+  // 데이터가 없는 목적지는 지도 검색 링크로 대체된다(아래 renderSpots 참고).
+  const SPOTS = {
+    "강릉":[["경포대·경포호","관동팔경 정자와 호수 둘레길","자연"],["안목 커피거리","바다 보며 커피 한 잔","카페"],["오죽헌","신사임당과 이이의 생가","역사"],["강릉중앙시장","닭강정과 어묵고로케","시장"]],
+    "속초":[["속초관광수산시장","닭강정과 오징어순대","시장"],["설악산 소공원","권금성 케이블카로 오르는 봉우리","자연"],["아바이마을 갯배","줄 당겨 건너는 무동력 배","명소"],["영랑호 호수공원","해 질 무렵 산책 코스","자연"]],
+    "양양":[["죽도해변","국내 대표 서핑 스폿","해변"],["하조대","기암 위 정자와 등대","자연"],["낙산사","동해가 내려다보이는 천년 사찰","역사"],["남애항","작고 조용한 항구 풍경","명소"]],
+    "동해":[["추암 촛대바위","일출 명소로 유명한 기암","자연"],["무릉계곡","기암과 폭포가 이어지는 계곡","자연"],["도째비골 스카이밸리","해안 절벽 위 유리 전망대","명소"],["망상해변","완만한 백사장","해변"]],
+    "삼척":[["대금굴·환선굴","대이리 석회동굴 지대","자연"],["죽서루","관동팔경의 누각","역사"],["장호항","맑은 물빛의 투명카약 명소","해변"],["삼척해상케이블카","해안선을 따라 오르는 조망","명소"]],
+    "원주":[["소금산 그랜드밸리","출렁다리와 잔도, 울렁다리","명소"],["뮤지엄산","안도 다다오가 설계한 미술관","문화"],["치악산 구룡사","단풍철 산행 기점","자연"],["원주 중앙시장","미로 같은 골목 상가","시장"]],
+    "영월":[["청령포","단종의 유배지, 강으로 둘러싸인 솔숲","역사"],["장릉","단종의 능","역사"],["한반도지형 전망대","한반도를 닮은 물돌이 지형","자연"],["별마로천문대","봉래산 정상의 천체 관측","명소"]],
+    "정선":[["정선아리랑시장","5일장 열리는 날이면 더 흥겨움","시장"],["병방치 스카이워크","동강 물돌이를 내려다보는 유리 전망대","명소"],["화암동굴","금광과 종유석이 함께 있는 동굴","자연"],["아우라지","뗏목과 아리랑의 발원지","역사"]],
+    "고한·사북":[["하이원리조트","사계절 운영하는 고원 리조트","명소"],["정암사","수마노탑이 있는 고찰","역사"],["만항재","차로 오르는 국내 최고지대 고갯길","자연"],["운탄고도","폐광 길을 걷는 트레킹 코스","자연"]],
+    "문막":[["반계리 은행나무","800년 넘은 천연기념물","자연"],["섬강 강변","한적한 물가 산책","자연"],["소금산 그랜드밸리","원주 시내 방향 출렁다리","명소"]],
+    "대전":[["성심당","튀김소보로의 본점","맛집"],["대청호 오백리길","호수를 따라 걷는 둘레길","자연"],["계족산 황톳길","맨발로 걷는 흙길","자연"],["한밭수목원","도심 속 대형 수목원","자연"]],
+    "세종":[["세종호수공원","수변 무대와 자전거길","자연"],["국립세종수목원","국내 최대 온실이 있는 수목원","자연"],["정부세종청사 옥상정원","세계 최장 옥상 정원","명소"],["밀마루전망대","신도시를 한눈에","명소"]],
+    "온양·아산":[["온양온천","역사 오래된 국내 대표 온천","온천"],["현충사","이순신 장군의 사당","역사"],["외암민속마을","돌담과 기와가 남은 옛 마을","역사"],["지중해마을","흰 벽에 파란 지붕의 상점가","명소"]],
+    "공주":[["공산성","금강을 끼고 도는 백제 산성","역사"],["무령왕릉과 왕릉원","백제 왕들의 무덤","역사"],["마곡사","춘마곡으로 불리는 봄 사찰","역사"],["공주 산성시장","국밥과 어물전","시장"]],
+    "금산":[["금산수삼센터","인삼 거래로 붐비는 시장","시장"],["진악산","금산 읍내를 감싸는 산","자연"],["칠백의총","임진왜란 의병들의 묘역","역사"],["적벽강","붉은 절벽 아래 흐르는 금강","자연"]],
+    "유구":[["유구 색동수국정원","여름철 수국이 만개하는 정원","자연"],["마곡사","차로 멀지 않은 공주의 명찰","역사"]],
+    "동대구":[["동성로","대구 최대 번화가","명소"],["서문시장","야시장까지 이어지는 대형 시장","시장"],["김광석다시그리기길","방천시장 옆 벽화 골목","문화"],["팔공산 갓바위","소원 들어준다는 석불","역사"]],
+    "서대구":[["이월드·83타워","놀이공원과 도심 전망대","명소"],["서문시장","납작만두와 칼국수","시장"],["달성공원","도심 속 오래된 공원","명소"]],
+    "구미":[["금오산 도립공원","케이블카로 오르는 구미의 산","자연"],["도리사","신라 불교가 처음 전해진 절","역사"],["낙동강체육공원","강변 자전거와 캠핑","자연"]],
+    "경주":[["불국사·석굴암","경주 여행의 기본 코스","역사"],["대릉원과 황리단길","고분 사이 카페 골목","명소"],["동궁과 월지","밤에 더 아름다운 연못","역사"],["첨성대","동양 최고(最古)의 천문대","역사"]],
+    "안동":[["하회마을","하회별신굿과 기와집 마을","역사"],["도산서원","퇴계 이황의 서원","역사"],["월영교","달빛 비치는 목교","명소"],["안동찜닭골목","구시장 안 찜닭 거리","맛집"]],
+    "영주":[["부석사","무량수전과 소백산 조망","역사"],["소수서원","최초의 서원, 선비촌과 함께","역사"],["무섬마을","물돌이 마을과 외나무다리","역사"],["소백산 자락길","완만한 산길 트레킹","자연"]],
+    "예천":[["회룡포","강이 마을을 감싸 도는 물돌이","자연"],["삼강주막","낙동강 뱃길의 마지막 주막","역사"],["예천천문우주센터","별 보는 체험 시설","문화"]],
+    "상주":[["경천대","낙동강 제일 경관이라 불리는 절벽","자연"],["남장사","일주문이 아름다운 고찰","역사"],["상주 자전거박물관","자전거의 도시다운 전시관","문화"]],
+    "점촌":[["문경새재","옛 과거길이 남은 고갯길","역사"],["에코랄라","석탄박물관과 함께 있는 테마파크","문화"],["단산모노레일","국내 최장 모노레일","명소"],["문경 오미자터널","폐터널을 활용한 체험장","명소"]],
+    "영천":[["임고서원","포은 정몽주를 기리는 서원","역사"],["보현산천문과학관","별 관측으로 이름난 곳","문화"],["영천 한의마을","한방 체험과 족욕","명소"]],
+    "영덕":[["강구항","영덕대게 거리의 중심","맛집"],["영덕 블루로드","해안 절벽을 따라 걷는 길","자연"],["삼사해상공원","일출과 경북대종","명소"],["죽도산 전망대","항구를 내려다보는 데크길","명소"]],
+    "영해":[["고래불해변","길게 뻗은 백사장","해변"],["괴시리 전통마을","기와집이 남은 옛 마을","역사"],["대진해변","한적한 동해 물놀이터","해변"]],
+    "울진":[["성류굴","국내 대표 석회암 동굴","자연"],["불영사","계곡을 품은 천년 사찰","역사"],["죽변 스카이레일","해안선 위를 달리는 레일바이크","명소"],["덕구온천","자연 용출 온천","온천"]],
+    "봉화":[["청량산","기암과 청량사가 있는 산","자연"],["분천 산타마을","기차역이 통째로 테마파크","명소"],["닭실마을","전통 한과로 유명한 종택 마을","역사"]],
+    "부산":[["해운대·광안리","해변과 야경의 대표 코스","해변"],["감천문화마을","산비탈 색색의 집들","문화"],["자갈치·부평깡통시장","회와 야시장 먹거리","시장"],["흰여울문화마을","영도의 절벽 위 골목","문화"]],
+    "부산서부":[["삼락생태공원","낙동강변 갈대와 자전거길","자연"],["구포시장","서부산 최대 재래시장","시장"],["을숙도 철새공원","낙동강 하구의 철새 서식지","자연"]],
+    "울산":[["대왕암공원","붉은 기암과 해안 산책로","자연"],["태화강 국가정원","도심을 지나는 강변 정원","자연"],["간절곶","국내에서 해가 가장 먼저 뜨는 곳","명소"],["장생포 고래문화특구","고래박물관과 옛 마을 재현","문화"]],
+    "마산":[["마산어시장","남해 수산물이 모이는 시장","시장"],["돝섬해상유원지","배로 건너는 작은 섬","명소"],["저도 콰이강의다리","바다 위 스카이워크 다리","명소"],["무학산","마산 시내를 감싸는 산","자연"]],
+    "김해":[["대성동고분군","금관가야 왕들의 무덤","역사"],["국립김해박물관","가야 문화 전시","문화"],["봉하마을","노무현 대통령 생가와 묘역","역사"],["가야테마파크","가야를 재현한 체험 공원","명소"]],
+    "내서":[["무학산","내서에서 오르는 마산의 주산","자연"],["마산어시장","시내 방향 대표 시장","시장"]],
+    "안성":[["안성팜랜드","넓은 초지와 목장 체험","명소"],["안성맞춤랜드","천문대와 캠핑장","명소"],["미리내성지","천주교 순교 성지","역사"],["서운산","완만한 등산 코스","자연"]],
+    "용인":[["에버랜드","국내 최대 테마파크","명소"],["한국민속촌","조선시대 마을 재현","문화"],["백남준아트센터","비디오아트 거장의 미술관","문화"],["와우정사","거대한 와불이 있는 절","역사"]],
+    "이천":[["예스파크(도자예술마을)","공방이 모인 도자 마을","문화"],["이천 온천","시내에서 가까운 온천 지구","온천"],["설봉공원","호수와 조각공원","자연"],["이천 쌀밥거리","한상 차림 밥집 골목","맛집"]],
+    "여주":[["세종대왕릉(영릉)","세종과 효종의 능","역사"],["신륵사","남한강을 낀 고찰","역사"],["여주 프리미엄아웃렛","쇼핑 겸 나들이","명소"],["황포돛배","남한강을 오르는 나룻배","명소"]],
+    "공도":[["안성팜랜드","공도에서 가까운 목장 나들이","명소"],["안성맞춤랜드","가족 단위 체험 공원","명소"]],
+    "신철원":[["고석정","한탄강 가운데 우뚝한 바위","자연"],["한탄강 주상절리길","절벽에 매달린 잔도","명소"],["삼부연폭포","시내에서 가까운 3단 폭포","자연"],["직탕폭포","한국의 나이아가라","자연"]],
+    "동송":[["노동당사","분단의 상징이 된 폐건물","역사"],["백마고지 전적지","한국전쟁 격전지","역사"],["고석정·꽃밭","한탄강 대표 관광지","자연"],["철원평야 두루미","겨울 철새 탐조","자연"]],
+    "운천":[["산정호수","호수 둘레길과 명성산","자연"],["비둘기낭 폭포","현무암 협곡의 비밀스러운 폭포","자연"],["포천아트밸리","폐채석장을 개조한 예술 공간","문화"]],
+    "광주":[["국립아시아문화전당","옛 도청 부지의 복합문화공간","문화"],["무등산 국립공원","입석대와 서석대 주상절리","자연"],["양림동 근대역사거리","선교사 사택과 카페 골목","문화"],["1913송정역시장","리모델링된 역전 시장","시장"]],
+    "전주":[["전주한옥마을","경기전과 한복 산책","역사"],["전동성당","한옥마을 앞 붉은 벽돌 성당","역사"],["남부시장 야시장","비빔밥과 청년몰","시장"],["자만벽화마을","한옥마을 뒤 언덕 골목","문화"]],
+    "목포":[["목포해상케이블카","유달산과 고하도를 잇는 조망","명소"],["유달산","시내와 다도해가 함께 보이는 산","자연"],["목포근대역사관","일제강점기 건물 그대로","역사"],["평화광장 춤추는 분수","야간 분수쇼","명소"]],
+    "순천":[["순천만국가정원","국내 첫 국가정원","자연"],["순천만 습지","갈대밭과 흑두루미","자연"],["낙안읍성","성곽 안에 사람이 사는 민속마을","역사"],["선암사","승선교가 아름다운 고찰","역사"]],
+    "여수":[["여수 해상케이블카","돌산과 자산공원을 잇는 바닷길","명소"],["오동도","동백과 방파제 산책로","자연"],["향일암","일출로 유명한 절벽 위 암자","역사"],["낭만포차·이순신광장","밤바다 야경과 포장마차","맛집"]],
+    "남원":[["광한루원","춘향전의 무대가 된 누각","역사"],["지리산 뱀사골","여름 계곡 트레킹","자연"],["춘향테마파크","춘향전을 재현한 공원","문화"],["실상사","지리산 자락의 평지 사찰","역사"]],
+    "정읍":[["내장산 국립공원","가을 단풍으로 이름난 산","자연"],["동학농민혁명기념관","황토현 전적지와 함께","역사"],["구절초 테마공원","가을 들꽃 군락지","자연"]],
+    "익산":[["미륵사지","국내 최대 백제 절터와 석탑","역사"],["왕궁리 유적","백제 왕궁터와 오층석탑","역사"],["익산 보석박물관","보석 가공 도시의 전시관","문화"],["두동교회","기역자 구조의 근대 교회","역사"]],
+    "군산":[["경암동 철길마을","철길 옆 옛 골목 상가","문화"],["초원사진관","영화 8월의 크리스마스 촬영지","문화"],["군산근대역사박물관","개항기 건물이 모인 구역","역사"],["선유도·고군산군도","다리로 이어진 섬 여행","자연"]],
+    "담양":[["죽녹원","대나무 숲 산책로","자연"],["메타세쿼이아길","시원하게 뻗은 가로수길","자연"],["관방제림","영산강변 노거수 숲","자연"],["소쇄원","조선 대표 별서 정원","역사"]],
+    "광양":[["청매실농원","봄철 매화가 뒤덮는 언덕","자연"],["백운산","섬진강을 내려다보는 산","자연"],["구봉산 전망대","여수·남해까지 보이는 야경","명소"],["광양 불고기거리","숯불 특유의 광양식 불고기","맛집"]],
+    "순창":[["강천산 군립공원","계곡과 구름다리","자연"],["순창고추장민속마을","장독대가 늘어선 마을","문화"],["채계산 출렁다리","국내 최장급 산악 현수교","명소"]],
+    "장흥":[["정남진 편백숲 우드랜드","편백나무 숲과 목재 체험","자연"],["천관산","가을 억새로 유명한 산","자연"],["장흥 토요시장","한우와 키조개 삼합","맛집"],["소등섬","드라마에 나온 작은 갯벌 섬","명소"]],
+    "보성":[["대한다원 녹차밭","계단식 차밭의 대표 풍경","자연"],["율포해수녹차탕","바닷물과 녹차를 함께","온천"],["제암산 자연휴양림","철쭉으로 유명한 산","자연"]],
+    "해남":[["땅끝마을 토말","한반도 최남단 전망대","명소"],["대흥사","두륜산 자락 대가람","역사"],["두륜산 케이블카","다도해 조망","명소"],["녹우당","고산 윤선도의 종택","역사"]],
+    "완도":[["청산도","느린 섬 슬로시티","자연"],["완도타워","다도해가 펼쳐지는 전망대","명소"],["신지 명사십리","고운 모래의 긴 해변","해변"],["정도리 구계등","자갈이 층층이 쌓인 해안","자연"]],
+    "진도":[["신비의 바닷길","바닷길이 갈라지는 회동리","자연"],["세방낙조","서남해 최고 일몰 포인트","자연"],["운림산방","소치 허련의 화실과 정원","문화"],["울돌목·진도타워","명량대첩의 거센 물길","역사"]],
+    "영광":[["백수해안도로","노을로 유명한 해안 드라이브","자연"],["불갑사","가을 상사화 군락","역사"],["법성포 굴비거리","영광굴비의 본고장","맛집"],["백제불교최초도래지","마라난타가 들어온 포구","역사"]],
+    "화순":[["화순 적벽","동복호를 낀 붉은 절벽","자연"],["고인돌 유적","세계유산 지석묘군","역사"],["운주사","천불천탑의 독특한 절","역사"],["화순온천","가족 단위 온천 지구","온천"]],
+    "무안":[["회산 백련지","동양 최대 백련 서식지","자연"],["톱머리해변","솔숲과 갯벌이 함께","해변"],["무안 낙지골목","세발낙지로 유명","맛집"]],
+    "부안":[["내소사","전나무길이 아름다운 사찰","역사"],["채석강","책을 쌓은 듯한 해식 절벽","자연"],["격포항","젓갈과 회를 함께","맛집"],["직소폭포","변산반도 안쪽 폭포","자연"]],
+    "김제":[["금산사","모악산 자락 대사찰","역사"],["벽골제","국내 최고(最古)의 저수지 유적","역사"],["김제 지평선","지평선이 보이는 넓은 평야","자연"]],
+    "당진":[["왜목마을","일출과 일몰을 한자리에서","자연"],["아미미술관","폐교를 개조한 미술관","문화"],["삽교호 관광지","방조제와 함상공원","명소"],["면천읍성","오래된 읍성과 골목","역사"]],
+    "서산":[["해미읍성","보존이 잘 된 조선 읍성","역사"],["개심사","왕벚꽃과 휜 기둥의 절","역사"],["간월암","물때에 따라 섬이 되는 암자","명소"],["유기방가옥","봄 수선화로 유명한 고택","문화"]],
+    "태안":[["신두리 해안사구","국내 최대 모래언덕","자연"],["천리포수목원","희귀 수목이 모인 해안 정원","자연"],["만리포해변","서해 대표 해수욕장","해변"],["안흥성·안흥항","포구와 성곽 산책","역사"]],
+    "보령":[["대천해수욕장","머드축제가 열리는 해변","해변"],["무창포 신비의 바닷길","바닷길이 열리는 해변","자연"],["성주사지","통일신라 절터와 석탑","역사"],["죽도 상화원","섬 전체를 두른 정원","명소"]],
+    "홍성":[["용봉산","기암이 많은 나지막한 산","자연"],["김좌진 장군 생가","독립운동가의 생가터","역사"],["광천 토굴새우젓","토굴 숙성 젓갈로 유명","맛집"],["홍주성 역사관","옛 홍주 관아 자리","역사"]],
+    "예산":[["수덕사","덕숭산 자락의 대찰","역사"],["예당호 출렁다리","국내 최장급 호수 현수교","명소"],["추사고택","김정희의 생가","역사"],["예산 상설시장","국수와 삽다리곱창","맛집"]],
+    "안면도":[["꽃지해수욕장","할미·할아비바위 일몰","해변"],["안면도 자연휴양림","안면송 소나무 숲","자연"],["백사장항","대하와 새우구이","맛집"],["방포항","조용한 포구와 해변","해변"]],
+    "논산":[["관촉사 은진미륵","거대한 고려 석조불","역사"],["탑정호 출렁다리","호수를 가로지르는 긴 다리","명소"],["돈암서원","세계유산 등재 서원","역사"],["강경포구","젓갈시장으로 유명","맛집"]],
+    "청주":[["상당산성","성곽을 걷는 도심 산성","역사"],["수암골","드라마 촬영지 벽화마을","문화"],["청남대","옛 대통령 별장과 정원","명소"],["문의문화재단지","이전 복원한 옛 건물 마을","역사"]],
+    "충주":[["탄금대","우륵이 가야금을 탄 언덕","역사"],["충주호 유람선","월악산을 배경으로 한 호수","자연"],["수주팔봉","팔봉 아래 인공 폭포","자연"],["활옥동굴","옥광산을 개방한 동굴 카페","명소"]],
+    "유성·대전":[["유성온천 족욕체험장","온천 지구 무료 족욕","온천"],["국립중앙과학관","체험형 전시와 천체관","문화"],["한밭수목원","도심 속 대형 수목원","자연"],["계족산 황톳길","맨발 걷기 코스","자연"]],
+  };
+
   const $ = id => document.getElementById(id);
   const won = n => n.toLocaleString('ko-KR') + "원";
 
@@ -511,6 +666,9 @@
     const candidates = pool();
     const emptyEl = $('empty'), passWrap = $('passWrap');
     passWrap.classList.remove('show');
+    setSpotsOpen(false);
+    currentPick = null;
+    $('spotHint').classList.remove('show');
     if(candidates.length===0){ emptyEl.classList.add('show'); return; }
     emptyEl.classList.remove('show');
 
@@ -525,6 +683,14 @@
       flap.textContent = pick.n;
       tag.textContent = pick.r + " · " + REGION_VIBE[pick.r];
       tag.classList.add('show');
+      currentPick = pick;
+      flap.classList.add('clickable');
+      flap.setAttribute('role', 'button');
+      flap.setAttribute('tabindex', '0');
+      flap.setAttribute('aria-controls', 'spots');
+      flap.setAttribute('aria-expanded', 'false');
+      flap.title = pick.n + " 근처 볼거리 보기";
+      $('spotHint').classList.add('show');
       $('go').disabled = false; rolling = false;
       $('go').textContent = "다시 출발!";
       printPass(pick);
@@ -572,6 +738,90 @@
     setTimeout(()=>pw.scrollIntoView({behavior:prefersReduce?'auto':'smooth', block:'nearest'}), 120);
     fetchLive(d, seq);
   }
+
+  // ── 근처 볼거리 패널 ──
+  let currentPick = null;
+  const mapUrl = q => "https://map.naver.com/p/search/" + encodeURIComponent(q);
+
+  // 지도 검색어에 붙일 지역명 보정.
+  // 터미널 이름이 읍·면 단위거나 시내 방면 표기라 그대로는 검색이 잘 안 되는 곳만 지정한다.
+  const SEARCH_CITY = {
+    "고한·사북":"정선","문막":"원주","유구":"공주","온양·아산":"아산",
+    "동대구":"대구","서대구":"대구","점촌":"문경","영해":"영덕",
+    "부산서부":"부산","내서":"창원","공도":"안성","신철원":"철원",
+    "동송":"철원","운천":"포천","안면도":"태안","유성·대전":"대전",
+  };
+  const searchCity = d => SEARCH_CITY[d.n] || d.n.split('·')[0];
+  // 볼거리 이름에 이미 지역명이 들어 있으면 중복해서 붙이지 않는다.
+  const searchQuery = (city, name) => name.includes(city) ? name : city + " " + name;
+
+  function spotCard(name, desc, tag, query){
+    const li = document.createElement('li');
+    const a = document.createElement('a');
+    a.href = mapUrl(query);
+    a.target = "_blank";
+    a.rel = "noopener";
+    const sn = document.createElement('div');
+    sn.className = 'sn';
+    sn.appendChild(document.createTextNode(name));
+    if(tag){
+      const t = document.createElement('span');
+      t.className = 'tag';
+      t.textContent = tag;
+      sn.appendChild(t);
+    }
+    a.appendChild(sn);
+    if(desc){
+      const sd = document.createElement('div');
+      sd.className = 'sd';
+      sd.textContent = desc;
+      a.appendChild(sd);
+    }
+    li.appendChild(a);
+    return li;
+  }
+
+  // 큐레이션 데이터가 있으면 카드로, 없으면 지도 검색 바로가기로 채운다.
+  const FALLBACK = [["관광지","가볼 만한 곳 둘러보기"],["맛집","현지 밥집 찾기"],
+                    ["카페","쉬어 갈 곳"],["전통시장","장 구경"]];
+
+  function renderSpots(d){
+    const list = $('spotsList'), note = $('spotsNote');
+    $('spotsPlace').textContent = d.n;
+    list.textContent = '';
+    const city = searchCity(d);
+    const items = SPOTS[d.n];
+    if(items && items.length){
+      note.hidden = true;
+      items.forEach(([n, desc, tag]) => list.appendChild(spotCard(n, desc, tag, searchQuery(city, n))));
+    } else {
+      note.hidden = false;
+      FALLBACK.forEach(([k, desc]) => list.appendChild(spotCard(k, desc, "검색", city + " " + k)));
+    }
+    $('spotsMore').href = mapUrl(city + " 관광지");
+  }
+
+  function setSpotsOpen(open){
+    if(open && !currentPick) return;
+    const el = $('spots'), hint = $('spotHint');
+    if(open) renderSpots(currentPick);
+    el.classList.toggle('show', open);
+    hint.textContent = open ? "볼거리 접기" : "근처 볼거리 보기";
+    hint.setAttribute('aria-expanded', open ? 'true' : 'false');
+    $('flap').setAttribute('aria-expanded', open ? 'true' : 'false');
+    if(open){
+      setTimeout(()=>el.scrollIntoView({behavior:prefersReduce?'auto':'smooth', block:'nearest'}), 100);
+    }
+  }
+  const toggleSpots = () => setSpotsOpen(!$('spots').classList.contains('show'));
+
+  $('spotHint').addEventListener('click', toggleSpots);
+  $('spotsClose').addEventListener('click', ()=>{ setSpotsOpen(false); $('spotHint').focus(); });
+  $('flap').addEventListener('click', ()=>{ if(currentPick) toggleSpots(); });
+  $('flap').addEventListener('keydown', e => {
+    if(!currentPick) return;
+    if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleSpots(); }
+  });
 
   $('go').addEventListener('click', spin);
   $('again').addEventListener('click', spin);
