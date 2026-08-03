@@ -136,6 +136,24 @@
   select:hover{border-color:#3a4560}
   select:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-color:var(--amber)}
 
+  /* ---- 날씨 필터 ---- */
+  .wxfilter{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:16px}
+  .wxtoggle{
+    display:inline-flex;align-items:center;gap:9px;cursor:pointer;
+    font-size:13px;font-weight:500;color:var(--road);
+    border:1px solid #2a3348;border-radius:999px;padding:9px 15px;
+    transition:border-color .15s,background .15s,color .15s;
+  }
+  .wxtoggle:hover{border-color:#3a4560}
+  .wxtoggle input{accent-color:var(--amber);width:15px;height:15px;margin:0;cursor:pointer}
+  .wxtoggle:has(input:checked){border-color:var(--amber);background:rgba(255,176,46,.08);color:var(--amber)}
+  .wxtoggle:has(input:disabled){opacity:.55;cursor:progress}
+  .wxtoggle:focus-within{outline:2px solid var(--amber);outline-offset:2px}
+  .wxstatus{
+    font-family:'Space Mono',monospace;font-size:11.5px;letter-spacing:.06em;
+    color:var(--muted);
+  }
+
   .go-btn{
     width:100%;margin-top:22px;
     font-family:'Black Han Sans',sans-serif;font-size:22px;letter-spacing:.02em;
@@ -199,6 +217,7 @@
   .wbadge{display:inline-block;font-size:12px;font-weight:700;color:#2a2417;
     background:rgba(184,121,26,.16);border:1px solid rgba(184,121,26,.35);
     padding:2px 9px;border-radius:6px;margin-right:8px}
+  .wxtip{display:block;margin-top:6px;font-size:12.5px;color:#6b6248}
 
   .stub{
     background:var(--stub);color:var(--road);position:relative;
@@ -374,6 +393,14 @@
           <option value="210">3시간 30분 이내</option>
         </select>
       </div>
+    </div>
+
+    <div class="wxfilter">
+      <label class="wxtoggle" for="dryOnly">
+        <input type="checkbox" id="dryOnly">
+        <span>비 안 오는 곳만</span>
+      </label>
+      <span class="wxstatus" id="wxStatus" aria-live="polite"></span>
     </div>
 
     <button class="go-btn" id="go">출발!</button>
@@ -727,15 +754,105 @@
 
   const WX_TTL = 30 * 60 * 1000;   // 같은 목적지를 다시 뽑아도 30분간 재요청하지 않는다
   const wxCache = new Map();
+  const WX_URL = "https://api.open-meteo.com/v1/forecast";
+  const WX_DAILY = "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max";
+  const WET_CODES  = [51,53,55,56,57,61,63,65,66,67,80,81,82,95,96,99];
+  const SNOW_CODES = [71,73,75,77,85,86];
 
-  function renderWeather(el, w){
+  // Open-Meteo 응답 한 건 → 내부 표현
+  function toW(r){
+    const day = r.daily || {}, cur = r.current || {};
+    // 최저/최고·강수확률이 모두 '오늘' 값이므로 상태 코드도 일별 값을 쓴다.
+    // (현재 코드를 쓰면 "맑음 · 강수확률 82%" 같은 모순이 생긴다)
+    const code = (day.weather_code && day.weather_code[0] != null) ? day.weather_code[0]
+               : (cur.weather_code != null ? cur.weather_code : null);
+    const num = v => (v == null ? null : Math.round(v));
+    return {
+      ...wmo(code), code,
+      now: num(cur.temperature_2m),
+      min: num(day.temperature_2m_min && day.temperature_2m_min[0]),
+      max: num(day.temperature_2m_max && day.temperature_2m_max[0]),
+      pop: day.precipitation_probability_max ? day.precipitation_probability_max[0] : null,
+    };
+  }
+
+  // 바다를 끼고 있는 목적지. SPOTS 의 '해변' 태그로 유추하면 여수·목포처럼
+  // 태그가 해변이 아닌 해안 도시를 놓치므로 명시적으로 둔다.
+  const SEASIDE = new Set([
+    "강릉","속초","양양","동해","삼척",
+    "영덕","영해","울진",
+    "부산","부산서부","울산","마산",
+    "목포","여수","광양","장흥","보성","해남","완도","진도","영광","무안","군산","부안",
+    "당진","서산","태안","보령","안면도",
+  ]);
+
+  // 날씨에 맞춘 한 줄 제안
+  function weatherTip(w, dest){
+    const beach = SEASIDE.has(dest.n);
+    const rainy = w.pop != null && w.pop >= 60;
+    if(SNOW_CODES.includes(w.code)) return "눈길 조심하세요. 이런 날엔 온천이 제철이에요.";
+    if(WET_CODES.includes(w.code) || rainy) return "실내 코스가 안전해요. 박물관·온천 쪽은 어때요?";
+    if(w.max != null && w.max <= 5) return "많이 추워요. 온천·실내 위주로 계획해 보세요.";
+    if(w.max != null && w.max >= 30)
+      return beach ? "더워요. 바다에 발 담그기 좋은 날이에요." : "더워요. 계곡이나 물가 쪽이 시원할 거예요.";
+    if(w.code === 0 || w.code === 1)
+      return beach ? "바다 보기 딱 좋은 날이에요." : "나들이하기 좋은 날이에요.";
+    return "무난한 날씨예요. 걷기 좋겠어요.";
+  }
+
+  function renderWeather(el, w, dest){
     const parts = [];
     if(w.now != null)  parts.push(`지금 <b>${w.now}°</b>`);
     if(w.min != null && w.max != null) parts.push(`${w.min}° / ${w.max}°`);
     if(w.pop != null)  parts.push(`강수확률 <b>${w.pop}%</b>`);
     if(w.pop != null && w.pop >= 60) parts.push("우산 챙기세요");
     el.className = 'weather';
-    el.innerHTML = `<span class="wbadge">${w.icon} 오늘 ${w.label}</span>${parts.join(' · ')}`;
+    el.innerHTML = `<span class="wbadge">${w.icon} 오늘 ${w.label}</span>${parts.join(' · ')}`
+                 + `<span class="wxtip">${weatherTip(w, dest)}</span>`;
+  }
+
+  // ── 전국 배치 조회 ──
+  // Open-Meteo 는 좌표를 콤마로 이어 붙이면 한 번의 요청으로 여러 지점을 돌려준다.
+  // "비 안 오는 곳만" 필터는 후보 전체의 강수확률이 필요하므로 이걸 쓴다.
+  let wxAllAt = 0, wxAllPending = null;
+
+  function fetchAllWeather(){
+    if(Date.now() - wxAllAt < WX_TTL) return Promise.resolve(true);
+    if(wxAllPending) return wxAllPending;                  // 중복 클릭 시 요청 합치기
+
+    const names = Object.keys(COORD);
+    const url = WX_URL
+      + "?latitude="  + names.map(n => COORD[n][0]).join(",")
+      + "&longitude=" + names.map(n => COORD[n][1]).join(",")
+      + "&current=temperature_2m,weather_code"
+      + "&daily=" + WX_DAILY
+      + "&timezone=Asia%2FSeoul&forecast_days=1";
+
+    wxAllPending = (async () => {
+      try{
+        const res = await fetch(url);
+        if(!res.ok) throw new Error('weather http ' + res.status);
+        const arr = await res.json();
+        if(!Array.isArray(arr) || arr.length !== names.length) throw new Error('배치 응답 형태가 예상과 다름');
+        const at = Date.now();
+        arr.forEach((r, i) => wxCache.set(names[i], { at, w: toW(r) }));
+        wxAllAt = at;
+        return true;
+      }catch(e){
+        return false;
+      }finally{
+        wxAllPending = null;
+      }
+    })();
+    return wxAllPending;
+  }
+
+  // 강수확률이 이 값 미만이면 '비 안 오는 곳'으로 본다.
+  const DRY_MAX = 50;
+  function isDry(d){
+    const c = wxCache.get(d.n);
+    if(!c) return true;                    // 모르는 곳은 배제하지 않는다
+    return c.w.pop == null || c.w.pop < DRY_MAX;
   }
 
   async function fetchWeather(dest, seq){
@@ -747,7 +864,7 @@
     const cached = wxCache.get(dest.n);
     if(cached && Date.now() - cached.at < WX_TTL){
       el.hidden = false;
-      renderWeather(el, cached.w);
+      renderWeather(el, cached.w, dest);
       return;
     }
 
@@ -755,31 +872,19 @@
     el.className = 'weather loading';
     el.textContent = '목적지 날씨 확인 중…';
     try{
-      const url = "https://api.open-meteo.com/v1/forecast"
+      const url = WX_URL
         + `?latitude=${c[0]}&longitude=${c[1]}`
         + "&current=temperature_2m,weather_code"
-        + "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max"
+        + "&daily=" + WX_DAILY
         + "&timezone=Asia%2FSeoul&forecast_days=1";
       const res = await fetch(url);
       if(!res.ok) throw new Error('weather http ' + res.status);
       const d = await res.json();
       if(seq !== liveSeq) return;                 // 더 최근 뽑기가 있으면 버린다
 
-      const day = d.daily || {}, cur = d.current || {};
-      // 최저/최고·강수확률이 모두 '오늘' 값이므로 상태 배지도 일별 코드를 쓴다.
-      // (현재 코드를 쓰면 "맑음 · 강수확률 82%" 같은 모순이 생긴다)
-      const code = (day.weather_code && day.weather_code[0] != null) ? day.weather_code[0]
-                 : (cur.weather_code != null ? cur.weather_code : null);
-      const r = round => (round == null ? null : Math.round(round));
-      const w = {
-        ...wmo(code),
-        now: r(cur.temperature_2m),
-        min: r(day.temperature_2m_min && day.temperature_2m_min[0]),
-        max: r(day.temperature_2m_max && day.temperature_2m_max[0]),
-        pop: day.precipitation_probability_max ? day.precipitation_probability_max[0] : null,
-      };
+      const w = toW(d);
       wxCache.set(dest.n, { at: Date.now(), w });
-      renderWeather(el, w);
+      renderWeather(el, w, dest);
     }catch(e){
       if(seq !== liveSeq) return;
       el.hidden = true;                            // 조용히 감춘다 (없어도 카드는 완성돼 있다)
@@ -791,8 +896,10 @@
 
   function pool(){
     const term = $('term').value, reg = $('region').value, bud = +$('budget').value, dur = +$('dur').value;
+    const dry = $('dryOnly').checked;
     return DEST.filter(d =>
       (term==='all' || d.t===term) && (reg==='all' || d.r===reg) && d.fare<=bud && d.dur<=dur
+      && (!dry || isDry(d))
     );
   }
   function refreshCount(){
@@ -828,6 +935,28 @@
   FILTER_IDS.forEach(id => $(id).addEventListener('change', () => { refreshCount(); saveFilters(); }));
   restoreFilters();
   refreshCount();
+
+  // "비 안 오는 곳만" — 켤 때 전국 날씨를 한 번에 받아 후보를 걸러낸다.
+  // 날씨는 계속 바뀌므로 이 조건만 일부러 저장하지 않는다(들어올 때마다 새로 판단).
+  $('dryOnly').addEventListener('change', async () => {
+    const box = $('dryOnly'), st = $('wxStatus');
+    if(!box.checked){ st.textContent = ''; refreshCount(); return; }
+
+    st.textContent = '전국 날씨 확인 중…';
+    box.disabled = true;
+    const okAll = await fetchAllWeather();
+    box.disabled = false;
+
+    if(!okAll){
+      box.checked = false;
+      st.textContent = '날씨를 불러오지 못했어요. 이 조건은 잠시 후 다시 시도해 주세요.';
+      refreshCount();
+      return;
+    }
+    const wet = DEST.filter(d => !isDry(d)).length;
+    st.textContent = wet ? `강수확률 ${DRY_MAX}% 이상 ${wet}곳 제외` : '오늘은 전국에 비 예보가 없어요';
+    refreshCount();
+  });
 
   let rolling = false;
   function spin(){
