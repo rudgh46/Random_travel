@@ -147,6 +147,19 @@ exports.handler = async (event) => {
   const p = event.queryStringParameters || {};
 
   try {
+    // ── 진단: 함수가 만드는 실제 요청 URL을 그대로 반환(브라우저 비교용) ──
+    if (p.showurl === "1") {
+      const op = p.op || OP_TERMINALS;
+      const { showurl: _s, op: _o, mode: _m, ...extra } = p;
+      const fullUrl = buildUrl(SERVICE_BASE, op, key, {
+        _type: "json",
+        numOfRows: p.numOfRows || "10",
+        pageNo: "1",
+        ...extra,
+      });
+      return json(200, { note: "이 URL을 브라우저 주소창에 그대로 붙여 결과를 비교하세요.", fullUrl });
+    }
+
     // ── 키 점검: 값은 노출하지 않고 존재/길이/형태만 ──
     if (p.keycheck === "1") {
       const nk = normalizeKey(key);
