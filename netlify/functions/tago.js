@@ -39,6 +39,14 @@ function normalizeKey(key) {
   return key;
 }
 
+// 게이트웨이는 "인코딩 키"(%2B... 형태)만 인식한다.
+// 환경변수에 디코딩 키(+, /, = 원문)를 넣었거나 앞뒤 공백/줄바꿈이 섞여도 동작하게 보정.
+function encodedKey(key) {
+  if (!key) return key;
+  const k = key.trim();
+  return k.includes("%") ? k : encodeURIComponent(k);
+}
+
 // 허용 오퍼레이션 화이트리스트 (임의 URL 프록시 남용 방지)
 const ALLOWED_OPS = new Set([
   OP_TERMINALS,
@@ -107,13 +115,18 @@ async function callTago(op, params, key) {
     e.errMsg = gw.errMsg;
     throw e;
   }
-  const items = data?.response?.body?.items?.item;
-  const header = data?.response?.header;
+  // 응답 래핑이 두 가지다:
+  //   구형: { response: { header, body: { items: { item: [...] } } } }
+  //   신형: { header, body: { items: [...] } }   ← 현재 ExpBusInfo 서비스
+  const env = data?.response ?? data;
+  const header = env?.header;
   if (header && header.resultCode && header.resultCode !== "00") {
     const e = new Error(header.resultMsg || "TAGO 오류");
     e.code = header.resultCode;
     throw e;
   }
+  const raw = env?.body?.items;
+  const items = raw?.item ?? raw;
   return items == null ? [] : Array.isArray(items) ? items : [items];
 }
 
@@ -139,10 +152,11 @@ async function searchTerminal(query, key, prefer) {
 }
 
 exports.handler = async (event) => {
-  const key = process.env.TAGO_KEY;
-  if (!key) {
+  const rawKey = process.env.TAGO_KEY;
+  if (!rawKey) {
     return json(500, { error: "TAGO_KEY 환경변수가 설정되지 않았습니다." });
   }
+  const key = encodedKey(rawKey);
 
   const p = event.queryStringParameters || {};
 
@@ -162,14 +176,16 @@ exports.handler = async (event) => {
 
     // ── 키 점검: 값은 노출하지 않고 존재/길이/형태만 ──
     if (p.keycheck === "1") {
-      const nk = normalizeKey(key);
+      const nk = normalizeKey(rawKey);
       return json(200, {
-        hasKey: !!key,
-        rawLen: key ? key.length : 0,
+        hasKey: !!rawKey,
+        rawLen: rawKey.length,
         normLen: nk ? nk.length : 0,
-        rawHasPercent: key ? key.includes("%") : false,
-        head: key ? key.slice(0, 4) : null,
-        tail: key ? key.slice(-4) : null,
+        sentLen: key.length,              // 실제로 URL에 붙는 길이
+        rawHasPercent: rawKey.includes("%"),
+        rawHasWhitespace: /\s/.test(rawKey), // 환경변수에 줄바꿈/공백이 섞였는지
+        head: rawKey.slice(0, 4),
+        tail: rawKey.slice(-4),
       });
     }
     // ── 탐색 모드: 서비스/오퍼레이션 후보를 자동 시험 ──
@@ -187,8 +203,9 @@ exports.handler = async (event) => {
             let code = null, msg = null;
             try {
               const j = JSON.parse(t);
-              code = j?.response?.header?.resultCode ?? null;
-              msg = j?.response?.header?.resultMsg ?? null;
+              const h = (j?.response ?? j)?.header;
+              code = h?.resultCode ?? null;
+              msg = h?.resultMsg ?? null;
             } catch {
               const m1 = t.match(/returnReasonCode>?\"?:?\s*\"?(\d+)/);
               const m2 = t.match(/(errMsg|returnAuthMsg)\"?:?\s*\"?([^\"<]+)/);
