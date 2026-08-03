@@ -14,14 +14,14 @@
 //   getExpBusGradList                고속버스 등급 목록
 //   getCtyCodeList                   도시코드 목록
 
-const SERVICE_BASE = "https://apis.data.go.kr/1613000/ExpBusInfoService";
+const SERVICE_BASE = "https://apis.data.go.kr/1613000/ExpBusInfo";
 const OP_TERMINALS = "GetExpBusTrminlList";
 const OP_ROUTE = "GetStrtpntAlocFndExpbusInfo";
 
 // probe 모드에서 시험할 서비스/오퍼레이션 후보 (계정마다 철자가 다를 수 있어 자동 탐색)
 const PROBE_BASES = [
+  "https://apis.data.go.kr/1613000/ExpBusInfo",
   "https://apis.data.go.kr/1613000/ExpBusInfoService",
-  "https://apis.data.go.kr/1613000/ExpBusInfoService/v1",
 ];
 const PROBE_OPS = [
   "getExpBusTrminlList",
@@ -46,9 +46,6 @@ const ALLOWED_OPS = new Set([
   "GetExpBusGradList",
   "GetCtyCodeList",
 ]);
-
-// 웜 컨테이너 동안 터미널 목록을 캐시 (호출 절약)
-let TERMINAL_CACHE = null;
 
 const json = (statusCode, body) => ({
   statusCode,
@@ -105,24 +102,17 @@ async function callTago(op, params, key) {
   return items == null ? [] : Array.isArray(items) ? items : [items];
 }
 
-async function getTerminals(key) {
-  if (TERMINAL_CACHE) return TERMINAL_CACHE;
-  const items = await callTago(OP_TERMINALS, { numOfRows: "1000" }, key);
-  TERMINAL_CACHE = items.map((t) => ({
-    id: t.terminalId,
-    name: t.terminalNm,
-  }));
-  return TERMINAL_CACHE;
-}
-
-// 이름으로 터미널 찾기: 정확히 시작 > 포함 > 종합/고속 선호 > 짧은 이름
-function findTerminal(terminals, query, prefer) {
+// 이름(terminalNm)으로 터미널 검색 → 후보 중 최적 하나 선택
+// 이 API는 terminalNm 파라미터로 부분일치 검색을 지원한다(전체 목록 조회는 안 됨).
+async function searchTerminal(query, key, prefer) {
   const q = query.replace(/[·\s]/g, "");
-  let cand = terminals.filter((t) => (t.name || "").replace(/\s/g, "").includes(q));
+  const items = await callTago(OP_TERMINALS, { terminalNm: q, numOfRows: "50" }, key);
+  const cand = items.map((t) => ({ id: t.terminalId, name: t.terminalNm }));
   if (cand.length === 0) return null;
   const score = (t) => {
     const n = (t.name || "").replace(/\s/g, "");
     let s = 0;
+    if (n === q) s += 8;
     if (n.startsWith(q)) s += 5;
     if (prefer && n.includes(prefer)) s += 3;
     if (/(종합|고속|터미널)/.test(n)) s += 1;
@@ -201,25 +191,27 @@ exports.handler = async (event) => {
       }
       return json(200, { op, sentUrlMasked: url.replace(key, "***KEY***"), raw: raw.slice(0, 1500) });
     }
-    // ── 편의 모드: 터미널 목록 ──
+    // ── 편의 모드: 터미널 검색 (terminalNm 필수) ──
     if (p.mode === "terminals") {
-      const terminals = await getTerminals(key);
+      const nm = (p.q || p.terminalNm || "").trim();
+      if (!nm) return json(400, { error: "q(터미널명) 파라미터가 필요합니다. 예: ?mode=terminals&q=센트럴" });
+      const items = await callTago(OP_TERMINALS, { terminalNm: nm, numOfRows: "50" }, key);
+      const terminals = items.map((t) => ({ id: t.terminalId, name: t.terminalNm }));
       return json(200, { count: terminals.length, terminals });
     }
 
     // ── 편의 모드: 출발지-도착지 운행정보 (이름 → ID 해석) ──
     if (p.mode === "route") {
       if (!p.arr) return json(400, { error: "arr(도착지 이름) 파라미터가 필요합니다." });
-      const terminals = await getTerminals(key);
 
       // 출발지 힌트: 여러 후보를 순서대로 시도 (예: 서울경부, 센트럴시티)
       const depHints = (p.depHint || "서울경부").split(",").map((s) => s.trim());
       let dep = null;
       for (const h of depHints) {
-        dep = findTerminal(terminals, h, "서울");
+        dep = await searchTerminal(h, key, "서울");
         if (dep) break;
       }
-      const arr = findTerminal(terminals, p.arr);
+      const arr = await searchTerminal(p.arr, key);
       if (!dep || !arr) {
         return json(404, {
           error: "터미널 ID를 찾지 못했습니다.",
