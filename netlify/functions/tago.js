@@ -15,15 +15,36 @@
 //   getCtyCodeList                   도시코드 목록
 
 const SERVICE_BASE = "https://apis.data.go.kr/1613000/ExpBusInfoService";
-const OP_TERMINALS = "getExpBusTrminlList";
-const OP_ROUTE = "getStrtpntAlocFndExpbusInfo";
+const OP_TERMINALS = "GetExpBusTrminlList";
+const OP_ROUTE = "GetStrtpntAlocFndExpbusInfo";
+
+// probe 모드에서 시험할 서비스/오퍼레이션 후보 (계정마다 철자가 다를 수 있어 자동 탐색)
+const PROBE_BASES = [
+  "https://apis.data.go.kr/1613000/ExpBusInfoService",
+  "https://apis.data.go.kr/1613000/ExpBusInfoService/v1",
+];
+const PROBE_OPS = [
+  "getExpBusTrminlList",
+  "getExpBusTmnList",
+  "getExpBusTerminalList",
+  "getExpBusTrminl",
+];
+
+// 인증키 정규화: 이미 인코딩된(Encoding) 키(%2B 등)는 한번 디코딩해서
+// URLSearchParams가 이중 인코딩(%252B)하지 않도록 한다.
+function normalizeKey(key) {
+  if (key && key.includes("%")) {
+    try { return decodeURIComponent(key); } catch { return key; }
+  }
+  return key;
+}
 
 // 허용 오퍼레이션 화이트리스트 (임의 URL 프록시 남용 방지)
 const ALLOWED_OPS = new Set([
   OP_TERMINALS,
   OP_ROUTE,
-  "getExpBusGradList",
-  "getCtyCodeList",
+  "GetExpBusGradList",
+  "GetCtyCodeList",
 ]);
 
 // 웜 컨테이너 동안 터미널 목록을 캐시 (호출 절약)
@@ -41,7 +62,7 @@ const json = (statusCode, body) => ({
 
 async function callTago(op, params, key) {
   const qs = new URLSearchParams({
-    serviceKey: key, // Decoding 키 사용 → URLSearchParams가 인코딩 처리
+    serviceKey: normalizeKey(key),
     _type: "json",
     numOfRows: "200",
     pageNo: "1",
@@ -121,11 +142,49 @@ exports.handler = async (event) => {
   const p = event.queryStringParameters || {};
 
   try {
+    // ── 탐색 모드: 서비스/오퍼레이션 후보를 자동 시험 ──
+    if (p.probe === "1") {
+      const nkey = normalizeKey(key);
+      const results = [];
+      for (const base of PROBE_BASES) {
+        for (const op of PROBE_OPS) {
+          const qs = new URLSearchParams({ serviceKey: nkey, _type: "json", numOfRows: "1", pageNo: "1" });
+          const url = `${base}/${op}?${qs.toString()}`;
+          const ctrl = new AbortController();
+          const timer = setTimeout(() => ctrl.abort(), 6000);
+          let note;
+          try {
+            const r = await fetch(url, { signal: ctrl.signal });
+            const t = await r.text();
+            let code = null, msg = null;
+            try {
+              const j = JSON.parse(t);
+              code = j?.response?.header?.resultCode ?? null;
+              msg = j?.response?.header?.resultMsg ?? null;
+            } catch {
+              const m1 = t.match(/returnReasonCode>?\"?:?\s*\"?(\d+)/);
+              const m2 = t.match(/(errMsg|returnAuthMsg)\"?:?\s*\"?([^\"<]+)/);
+              code = m1 ? m1[1] : "?";
+              msg = m2 ? m2[2] : t.slice(0, 80);
+            }
+            note = { ok: code === "00", code, msg };
+          } catch (e) {
+            note = { ok: false, code: e.name, msg: e.message };
+          } finally {
+            clearTimeout(timer);
+          }
+          results.push({ base: base.replace("https://apis.data.go.kr/1613000/", ""), op, ...note });
+        }
+      }
+      const hit = results.find((r) => r.ok);
+      return json(200, { hit: hit || null, results });
+    }
+
     // ── 진단 모드: TAGO 원본 응답을 그대로 반환 ──
     if (p.debug === "1") {
       const op = p.op || OP_TERMINALS;
       const qs = new URLSearchParams({
-        serviceKey: key,
+        serviceKey: normalizeKey(key),
         _type: "json",
         numOfRows: p.numOfRows || "10",
         pageNo: "1",
