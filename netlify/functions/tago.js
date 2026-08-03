@@ -121,6 +121,27 @@ exports.handler = async (event) => {
   const p = event.queryStringParameters || {};
 
   try {
+    // ── 진단 모드: TAGO 원본 응답을 그대로 반환 ──
+    if (p.debug === "1") {
+      const op = p.op || OP_TERMINALS;
+      const qs = new URLSearchParams({
+        serviceKey: key,
+        _type: "json",
+        numOfRows: p.numOfRows || "10",
+        pageNo: "1",
+      });
+      const url = `${SERVICE_BASE}/${op}?${qs.toString()}`;
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      let raw;
+      try {
+        const r = await fetch(url, { signal: ctrl.signal });
+        raw = await r.text();
+      } finally {
+        clearTimeout(timer);
+      }
+      return json(200, { op, sentUrlMasked: url.replace(key, "***KEY***"), raw: raw.slice(0, 1500) });
+    }
     // ── 편의 모드: 터미널 목록 ──
     if (p.mode === "terminals") {
       const terminals = await getTerminals(key);
