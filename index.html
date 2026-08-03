@@ -193,12 +193,14 @@
     font-family:'Gothic A1',sans-serif;font-weight:700;font-size:14.5px;
     padding:14px;border-radius:12px;cursor:pointer;transition:transform .1s,background .2s,border-color .2s;
   }
-  .again{background:transparent;color:var(--road);border:1.5px solid #2a3348}
-  .again:hover{border-color:var(--amber);color:var(--amber)}
+  /* 승차권은 종이색 배경이므로 버튼도 종이 위에서 읽히는 색을 쓴다 */
+  .again{background:transparent;color:#4a4231;border:1.5px solid var(--paper-line)}
+  .again:hover{border-color:#b8791a;color:#2a2417;background:rgba(184,121,26,.09)}
   .again:active{transform:translateY(1px)}
-  .book{background:var(--road);color:var(--ink);border:1.5px solid var(--road)}
-  .book:hover{background:#fff}
-  .again:focus-visible,.book:focus-visible{outline:2px solid var(--amber);outline-offset:2px}
+  .book{background:#2a2417;color:var(--paper);border:1.5px solid #2a2417}
+  .book:hover{background:#3d3521;border-color:#3d3521}
+  .book:active{transform:translateY(1px)}
+  .again:focus-visible,.book:focus-visible{outline:2px solid #b8791a;outline-offset:2px}
 
   /* ---- 근처 볼거리 ---- */
   .flap.clickable{cursor:pointer;border-radius:14px;transition:transform .12s ease}
@@ -219,6 +221,9 @@
     width:100%;max-width:760px;margin-top:18px;display:none;
     background:var(--paper);color:#2a2417;border-radius:16px;padding:20px 22px;
     box-shadow:0 30px 70px -30px rgba(0,0,0,.8);
+    /* .pass-wrap 이 perspective 때문에 스태킹 컨텍스트(z-index:0 취급)가 되어
+       승차권의 아래쪽 그림자가 이 카드 위에 얹힌다. 레이어를 올려서 덮이지 않게 한다. */
+    position:relative;z-index:1;
   }
   .spots.show{display:block;animation:print .5s cubic-bezier(.2,.9,.25,1.05)}
   .spots-head{
