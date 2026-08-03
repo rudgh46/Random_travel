@@ -103,7 +103,7 @@
 
   /* ---- controls ---- */
   .filters{
-    display:grid;grid-template-columns:repeat(3,1fr);gap:12px;
+    display:grid;grid-template-columns:repeat(4,1fr);gap:12px;
     margin:22px 0 6px;
   }
   .filters label{
@@ -168,6 +168,13 @@
   .cell .v small{font-weight:500;font-size:12.5px;color:#8a7f63}
   .daytrip{margin-top:18px;display:inline-block;font-size:12.5px;font-weight:700;
     padding:6px 12px;border-radius:8px;background:#2a2417;color:var(--paper)}
+  .live{margin-top:14px;padding-top:12px;border-top:1px dashed var(--paper-line);
+    font-size:13px;color:#443c28;line-height:1.5}
+  .live .badge{display:inline-block;font-family:'Space Mono',monospace;font-size:10px;
+    letter-spacing:.1em;text-transform:uppercase;color:#fff;background:#2f7a43;
+    padding:3px 8px;border-radius:6px;margin-right:8px}
+  .live b{color:#b8791a}
+  .live.loading{color:#8a7f63}
 
   .stub{
     background:var(--stub);color:var(--road);position:relative;
@@ -204,7 +211,6 @@
 
   @media (max-width:560px){
     .filters{grid-template-columns:1fr 1fr}
-    .filters .col-dur{grid-column:1 / -1}
     .pass{grid-template-columns:1fr}
     .stub{flex-direction:row;justify-content:space-around;padding:16px}
     .stub::before{left:0;top:-9px;right:0;bottom:auto;width:auto;height:18px;
@@ -218,7 +224,7 @@
 </head>
 <body>
   <header>
-    <div class="eyebrow">서울고속버스터미널 · 경부영동선</div>
+    <div class="eyebrow">서울고속터미널 · 센트럴시티</div>
     <h1>오늘, <span class="hl">어디로든</span><br>떠나볼까요</h1>
     <p class="sub">버튼 한 번이면 목적지가 정해집니다. 고민은 안내판에 맡기세요.</p>
     <div class="clockrow"><span class="dot"></span><span id="now">--:--</span><span>KST</span><span id="today"></span></div>
@@ -240,6 +246,14 @@
 
     <div class="filters">
       <div>
+        <label for="term">터미널</label>
+        <select id="term">
+          <option value="all">전체</option>
+          <option value="gb">경부·영동선</option>
+          <option value="hn">호남선(센트럴시티)</option>
+        </select>
+      </div>
+      <div>
         <label for="region">권역</label>
         <select id="region">
           <option value="all">전체</option>
@@ -248,6 +262,8 @@
           <option value="경북">경북 · 고도와 전통</option>
           <option value="경남·부산">경남 · 부산</option>
           <option value="수도권근교">수도권 근교</option>
+          <option value="전라">전라 · 남도</option>
+          <option value="충청 서해안">충청 서해안</option>
         </select>
       </div>
       <div>
@@ -278,7 +294,7 @@
       <div class="pass-main">
         <div class="pass-brand"><span>Boarding Pass</span><span id="passNo">NO. ------</span></div>
         <div class="route">
-          <div class="from"><span class="code">SEOUL · 서울고속</span><span class="place">서울</span></div>
+          <div class="from"><span class="code" id="passFrom">SEOUL</span><span class="place">서울</span></div>
           <div class="arrow"><svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M1 7h11M8 3l4 4-4 4" stroke="#b8791a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <div class="to"><span class="code" id="passRegionCode">DEST</span><span class="place" id="passPlace">—</span></div>
         </div>
@@ -289,6 +305,7 @@
           <div class="cell"><div class="k">Region · 권역</div><div class="v" id="passRegion">—</div></div>
         </div>
         <span class="daytrip" id="passDaytrip">—</span>
+        <div class="live" id="passLive" hidden></div>
         <div class="pass-actions">
           <button class="again" id="again">다시 뽑기</button>
           <a class="book" id="book" href="https://www.kobus.co.kr" target="_blank" rel="noopener">코버스에서 예매</a>
@@ -307,89 +324,185 @@
   </div>
 
   <footer>
-    요금은 우등·일반 기준 편도 예상값이며 날짜·좌석 등급에 따라 달라집니다.
-    센트럴시티(호남선) 노선은 별도 터미널이라 포함되지 않았습니다.
+    경부·영동선과 호남선(센트럴시티) 두 터미널을 모두 포함합니다.
+    요금은 우등 기준 편도 예상값이며 날짜·좌석 등급에 따라 달라집니다.
     실제 출발편·잔여석은 <a href="https://www.kobus.co.kr" target="_blank" rel="noopener">코버스</a>에서 확인하세요.
   </footer>
 
 <script>
-  // 서울고속버스터미널(경부·영동선) 실제 노선 데이터 — 우등/일반 편도 요금(원), 소요시간(분)
+  // 실제 노선 데이터 — 우등/일반 편도 요금(원), 소요시간(분)
+  // t: 터미널  gb=경부·영동선  hn=호남선(센트럴시티)
   const DEST = [
-    {n:"강릉",   r:"강원",       fare:24600, dur:167, grade:"우등"},
-    {n:"속초",   r:"강원",       fare:22300, dur:155, grade:"우등"},
-    {n:"양양",   r:"강원",       fare:19900, dur:139, grade:"우등"},
-    {n:"동해",   r:"강원",       fare:27200, dur:187, grade:"우등"},
-    {n:"삼척",   r:"강원",       fare:29500, dur:196, grade:"우등"},
-    {n:"원주",   r:"강원",       fare:12400, dur:97,  grade:"우등"},
-    {n:"영월",   r:"강원",       fare:21200, dur:139, grade:"우등"},
-    {n:"정선",   r:"강원",       fare:25000, dur:176, grade:"우등"},
-    {n:"고한·사북",r:"강원",     fare:31400, dur:157, grade:"우등"},
-    {n:"문막",   r:"강원",       fare:11100, dur:82,  grade:"우등"},
+    // ── 경부·영동선 터미널 ──
+    {n:"강릉",   r:"강원",       fare:24600, dur:167, grade:"우등", t:"gb"},
+    {n:"속초",   r:"강원",       fare:22300, dur:155, grade:"우등", t:"gb"},
+    {n:"양양",   r:"강원",       fare:19900, dur:139, grade:"우등", t:"gb"},
+    {n:"동해",   r:"강원",       fare:27200, dur:187, grade:"우등", t:"gb"},
+    {n:"삼척",   r:"강원",       fare:29500, dur:196, grade:"우등", t:"gb"},
+    {n:"원주",   r:"강원",       fare:12400, dur:97,  grade:"우등", t:"gb"},
+    {n:"영월",   r:"강원",       fare:21200, dur:139, grade:"우등", t:"gb"},
+    {n:"정선",   r:"강원",       fare:25000, dur:176, grade:"우등", t:"gb"},
+    {n:"고한·사북",r:"강원",     fare:31400, dur:157, grade:"우등", t:"gb"},
+    {n:"문막",   r:"강원",       fare:11100, dur:82,  grade:"우등", t:"gb"},
 
-    {n:"대전",   r:"충청·세종",  fare:16600, dur:129, grade:"우등"},
-    {n:"세종",   r:"충청·세종",  fare:14400, dur:122, grade:"우등"},
-    {n:"온양·아산",r:"충청·세종", fare:10600, dur:92,  grade:"우등"},
-    {n:"공주",   r:"충청·세종",  fare:13700, dur:108, grade:"우등"},
-    {n:"금산",   r:"충청·세종",  fare:20400, dur:147, grade:"우등"},
-    {n:"유구",   r:"충청·세종",  fare:16300, dur:111, grade:"우등"},
+    {n:"대전",   r:"충청·세종",  fare:16600, dur:129, grade:"우등", t:"gb"},
+    {n:"세종",   r:"충청·세종",  fare:14400, dur:122, grade:"우등", t:"gb"},
+    {n:"온양·아산",r:"충청·세종", fare:10600, dur:92,  grade:"우등", t:"gb"},
+    {n:"공주",   r:"충청·세종",  fare:13700, dur:108, grade:"우등", t:"gb"},
+    {n:"금산",   r:"충청·세종",  fare:20400, dur:147, grade:"우등", t:"gb"},
+    {n:"유구",   r:"충청·세종",  fare:16300, dur:111, grade:"우등", t:"gb"},
 
-    {n:"동대구", r:"경북",       fare:30000, dur:227, grade:"우등"},
-    {n:"서대구", r:"경북",       fare:30000, dur:205, grade:"우등"},
-    {n:"구미",   r:"경북",       fare:25500, dur:179, grade:"우등"},
-    {n:"경주",   r:"경북",       fare:33600, dur:226, grade:"우등"},
-    {n:"안동",   r:"경북",       fare:24400, dur:164, grade:"우등"},
-    {n:"영주",   r:"경북",       fare:21200, dur:151, grade:"우등"},
-    {n:"예천",   r:"경북",       fare:24600, dur:160, grade:"우등"},
-    {n:"상주",   r:"경북",       fare:21100, dur:150, grade:"우등"},
-    {n:"점촌",   r:"경북",       fare:19000, dur:139, grade:"우등"},
-    {n:"영천",   r:"경북",       fare:20600, dur:209, grade:"일반"},
-    {n:"영덕",   r:"경북",       fare:35700, dur:217, grade:"우등"},
-    {n:"영해",   r:"경북",       fare:39000, dur:224, grade:"우등"},
-    {n:"울진",   r:"경북",       fare:38200, dur:218, grade:"우등"},
-    {n:"봉화",   r:"경북",       fare:24800, dur:152, grade:"우등"},
+    {n:"동대구", r:"경북",       fare:30000, dur:227, grade:"우등", t:"gb"},
+    {n:"서대구", r:"경북",       fare:30000, dur:205, grade:"우등", t:"gb"},
+    {n:"구미",   r:"경북",       fare:25500, dur:179, grade:"우등", t:"gb"},
+    {n:"경주",   r:"경북",       fare:33600, dur:226, grade:"우등", t:"gb"},
+    {n:"안동",   r:"경북",       fare:24400, dur:164, grade:"우등", t:"gb"},
+    {n:"영주",   r:"경북",       fare:21200, dur:151, grade:"우등", t:"gb"},
+    {n:"예천",   r:"경북",       fare:24600, dur:160, grade:"우등", t:"gb"},
+    {n:"상주",   r:"경북",       fare:21100, dur:150, grade:"우등", t:"gb"},
+    {n:"점촌",   r:"경북",       fare:19000, dur:139, grade:"우등", t:"gb"},
+    {n:"영천",   r:"경북",       fare:20600, dur:209, grade:"일반", t:"gb"},
+    {n:"영덕",   r:"경북",       fare:35700, dur:217, grade:"우등", t:"gb"},
+    {n:"영해",   r:"경북",       fare:39000, dur:224, grade:"우등", t:"gb"},
+    {n:"울진",   r:"경북",       fare:38200, dur:218, grade:"우등", t:"gb"},
+    {n:"봉화",   r:"경북",       fare:24800, dur:152, grade:"우등", t:"gb"},
 
-    {n:"부산",   r:"경남·부산",  fare:39700, dur:259, grade:"우등"},
-    {n:"부산서부",r:"경남·부산", fare:40400, dur:272, grade:"우등"},
-    {n:"울산",   r:"경남·부산",  fare:38300, dur:264, grade:"우등"},
-    {n:"마산",   r:"경남·부산",  fare:36300, dur:247, grade:"우등"},
-    {n:"김해",   r:"경남·부산",  fare:39400, dur:268, grade:"우등"},
-    {n:"내서",   r:"경남·부산",  fare:36300, dur:238, grade:"우등"},
+    {n:"부산",   r:"경남·부산",  fare:39700, dur:259, grade:"우등", t:"gb"},
+    {n:"부산서부",r:"경남·부산", fare:40400, dur:272, grade:"우등", t:"gb"},
+    {n:"울산",   r:"경남·부산",  fare:38300, dur:264, grade:"우등", t:"gb"},
+    {n:"마산",   r:"경남·부산",  fare:36300, dur:247, grade:"우등", t:"gb"},
+    {n:"김해",   r:"경남·부산",  fare:39400, dur:268, grade:"우등", t:"gb"},
+    {n:"내서",   r:"경남·부산",  fare:36300, dur:238, grade:"우등", t:"gb"},
 
-    {n:"안성",   r:"수도권근교", fare:9400,  dur:63,  grade:"우등"},
-    {n:"용인",   r:"수도권근교", fare:3600,  dur:52,  grade:"일반"},
-    {n:"이천",   r:"수도권근교", fare:6300,  dur:73,  grade:"우등"},
-    {n:"여주",   r:"수도권근교", fare:7900,  dur:79,  grade:"우등"},
-    {n:"공도",   r:"수도권근교", fare:6700,  dur:64,  grade:"우등"},
-    {n:"신철원", r:"수도권근교", fare:11100, dur:95,  grade:"일반"},
-    {n:"동송",   r:"수도권근교", fare:13600, dur:106, grade:"일반"},
-    {n:"운천",   r:"수도권근교", fare:10000, dur:89,  grade:"일반"},
+    {n:"안성",   r:"수도권근교", fare:9400,  dur:63,  grade:"우등", t:"gb"},
+    {n:"용인",   r:"수도권근교", fare:3600,  dur:52,  grade:"일반", t:"gb"},
+    {n:"이천",   r:"수도권근교", fare:6300,  dur:73,  grade:"우등", t:"gb"},
+    {n:"여주",   r:"수도권근교", fare:7900,  dur:79,  grade:"우등", t:"gb"},
+    {n:"공도",   r:"수도권근교", fare:6700,  dur:64,  grade:"우등", t:"gb"},
+    {n:"신철원", r:"수도권근교", fare:11100, dur:95,  grade:"일반", t:"gb"},
+    {n:"동송",   r:"수도권근교", fare:13600, dur:106, grade:"일반", t:"gb"},
+    {n:"운천",   r:"수도권근교", fare:10000, dur:89,  grade:"일반", t:"gb"},
+
+    // ── 호남선 터미널 (센트럴시티) ──
+    {n:"광주",   r:"전라",       fare:30800, dur:221, grade:"우등", t:"hn"},
+    {n:"전주",   r:"전라",       fare:22000, dur:176, grade:"우등", t:"hn"},
+    {n:"목포",   r:"전라",       fare:33700, dur:235, grade:"우등", t:"hn"},
+    {n:"순천",   r:"전라",       fare:33800, dur:235, grade:"우등", t:"hn"},
+    {n:"여수",   r:"전라",       fare:36400, dur:250, grade:"우등", t:"hn"},
+    {n:"남원",   r:"전라",       fare:27500, dur:190, grade:"우등", t:"hn"},
+    {n:"정읍",   r:"전라",       fare:24300, dur:179, grade:"우등", t:"hn"},
+    {n:"익산",   r:"전라",       fare:21500, dur:165, grade:"우등", t:"hn"},
+    {n:"군산",   r:"전라",       fare:22000, dur:155, grade:"우등", t:"hn"},
+    {n:"담양",   r:"전라",       fare:30500, dur:210, grade:"우등", t:"hn"},
+    {n:"광양",   r:"전라",       fare:34700, dur:224, grade:"우등", t:"hn"},
+    {n:"순창",   r:"전라",       fare:24800, dur:199, grade:"우등", t:"hn"},
+    {n:"장흥",   r:"전라",       fare:44200, dur:260, grade:"우등", t:"hn"},
+    {n:"보성",   r:"전라",       fare:39900, dur:259, grade:"우등", t:"hn"},
+    {n:"해남",   r:"전라",       fare:42300, dur:261, grade:"우등", t:"hn"},
+    {n:"완도",   r:"전라",       fare:44000, dur:299, grade:"우등", t:"hn"},
+    {n:"진도",   r:"전라",       fare:40900, dur:278, grade:"우등", t:"hn"},
+    {n:"영광",   r:"전라",       fare:30600, dur:204, grade:"우등", t:"hn"},
+    {n:"화순",   r:"전라",       fare:34300, dur:226, grade:"우등", t:"hn"},
+    {n:"무안",   r:"전라",       fare:33500, dur:217, grade:"우등", t:"hn"},
+    {n:"부안",   r:"전라",       fare:23100, dur:171, grade:"우등", t:"hn"},
+    {n:"김제",   r:"전라",       fare:24400, dur:167, grade:"우등", t:"hn"},
+
+    {n:"당진",   r:"충청 서해안", fare:11300, dur:95,  grade:"우등", t:"hn"},
+    {n:"서산",   r:"충청 서해안", fare:13800, dur:108, grade:"우등", t:"hn"},
+    {n:"태안",   r:"충청 서해안", fare:15700, dur:127, grade:"우등", t:"hn"},
+    {n:"보령",   r:"충청 서해안", fare:18900, dur:130, grade:"우등", t:"hn"},
+    {n:"홍성",   r:"충청 서해안", fare:14900, dur:114, grade:"우등", t:"hn"},
+    {n:"예산",   r:"충청 서해안", fare:12700, dur:105, grade:"우등", t:"hn"},
+    {n:"안면도", r:"충청 서해안", fare:19200, dur:148, grade:"우등", t:"hn"},
+    {n:"논산",   r:"충청 서해안", fare:17000, dur:135, grade:"우등", t:"hn"},
+    {n:"청주",   r:"충청 서해안", fare:12800, dur:112, grade:"우등", t:"hn"},
+    {n:"충주",   r:"충청 서해안", fare:13200, dur:113, grade:"우등", t:"hn"},
+    {n:"유성·대전",r:"충청 서해안",fare:16900, dur:160, grade:"우등", t:"hn"},
   ];
 
+  const TERM_LABEL = { gb:"경부·영동선", hn:"호남선(센트럴시티)" };
   const REGION_CODE = {
     "강원":"GANGWON","충청·세종":"CHUNGCHEONG","경북":"GYEONGBUK",
-    "경남·부산":"GYEONGNAM","수도권근교":"METRO"
+    "경남·부산":"GYEONGNAM","수도권근교":"METRO","전라":"JEOLLA","충청 서해안":"CHUNGNAM"
   };
   const REGION_VIBE = {
     "강원":"바다와 산","충청·세종":"도심과 여유","경북":"고도·전통",
-    "경남·부산":"남쪽 끝, 바다","수도권근교":"가벼운 당일치기"
+    "경남·부산":"남쪽 끝, 바다","수도권근교":"가벼운 당일치기",
+    "전라":"남도 맛과 정취","충청 서해안":"서해안과 온천"
   };
 
   const $ = id => document.getElementById(id);
   const won = n => n.toLocaleString('ko-KR') + "원";
+
+  // ── 실시간(TAGO) 연동 설정 ──
+  // Netlify에 배포하면 /api/tago 프록시가 살아있고, 그렇지 않으면(예: 로컬·GitHub Pages)
+  // 조용히 기본값만 사용한다.
+  const API_BASE = "/api/tago";
+  const DEP_HINT = { gb: "서울경부", hn: "센트럴시티,서울호남" };
+  let liveSeq = 0; // 오래된 응답이 최신 카드를 덮어쓰지 않도록
+
+  const yyyymmdd = () => {
+    const d = new Date();
+    const p = n => String(n).padStart(2, '0');
+    return "" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate());
+  };
+  const hhmm = s => (s && s.length >= 12) ? s.slice(8, 10) + ":" + s.slice(10, 12) : (s || "");
+
+  async function fetchLive(dest, seq) {
+    const el = $('passLive');
+    if (!el) return;
+    el.hidden = false;
+    el.className = 'live loading';
+    el.textContent = '실시간 운행정보 불러오는 중…';
+    try {
+      const q = new URLSearchParams({
+        mode: "route",
+        depHint: DEP_HINT[dest.t] || "서울경부",
+        arr: dest.n.split('·')[0], // "온양·아산" → "온양"
+        date: yyyymmdd(),
+      });
+      const res = await fetch(`${API_BASE}?${q}`);
+      if (!res.ok) throw new Error('unavailable');
+      const data = await res.json();
+      if (seq !== liveSeq) return;            // 더 최근 뽑기가 있으면 무시
+      if (!data.trips || data.trips.length === 0) throw new Error('empty');
+
+      const now = new Date();
+      const nowKey = yyyymmdd() + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
+      const upcoming = data.trips
+        .filter(t => t.dep && t.dep >= nowKey)
+        .sort((a, b) => a.dep.localeCompare(b.dep));
+      const fares = data.trips.map(t => t.charge).filter(Boolean);
+      const minF = fares.length ? Math.min(...fares) : null;
+      const maxF = fares.length ? Math.max(...fares) : null;
+
+      const next = upcoming[0];
+      const parts = [];
+      if (next) parts.push(`다음 출발 <b>${hhmm(next.dep)}</b> (${next.grade || '-'})`);
+      if (minF) parts.push(minF === maxF ? `요금 <b>${won(minF)}</b>` : `요금 <b>${won(minF)}~${won(maxF)}</b>`);
+      parts.push(`오늘 <b>${data.trips.length}</b>편`);
+
+      el.className = 'live';
+      el.innerHTML = `<span class="badge">실시간</span>${parts.join(' · ')}`;
+    } catch (e) {
+      if (seq !== liveSeq) return;
+      el.hidden = true;                        // 프록시 없거나 실패 → 기본값 카드 유지
+    }
+  }
   const durText = m => { const h=Math.floor(m/60), mm=m%60; return [h?h+"시간":"", mm?mm+"분":""].filter(Boolean).join(" ") || "0분"; };
   const prefersReduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   function pool(){
-    const reg = $('region').value, bud = +$('budget').value, dur = +$('dur').value;
+    const term = $('term').value, reg = $('region').value, bud = +$('budget').value, dur = +$('dur').value;
     return DEST.filter(d =>
-      (reg==='all' || d.r===reg) && d.fare<=bud && d.dur<=dur
+      (term==='all' || d.t===term) && (reg==='all' || d.r===reg) && d.fare<=bud && d.dur<=dur
     );
   }
   function refreshCount(){
     const p = pool();
     $('poolCount').textContent = p.length + "개 노선 대기중";
   }
-  ['region','budget','dur'].forEach(id => $(id).addEventListener('change', refreshCount));
+  ['term','region','budget','dur'].forEach(id => $(id).addEventListener('change', refreshCount));
   refreshCount();
 
   let rolling = false;
@@ -434,10 +547,14 @@
   }
 
   function printPass(d){
+    const seq = ++liveSeq;
+    const liveEl = $('passLive');
+    if (liveEl) liveEl.hidden = true;
     const daytrip = d.dur<=150 ? "당일치기 좋아요"
                   : d.dur<=210 ? "부지런하면 당일치기"
                   : "1박 추천 코스";
     $('passPlace').textContent = d.n;
+    $('passFrom').textContent = "SEOUL · " + TERM_LABEL[d.t];
     $('passRegionCode').textContent = REGION_CODE[d.r] || "DEST";
     $('passFare').innerHTML = won(d.fare) + " <small>/ "+d.grade+"</small>";
     $('passDur').textContent = durText(d.dur);
@@ -453,6 +570,7 @@
     const pass = pw.querySelector('.pass');
     if(!prefersReduce){ pass.style.animation='none'; void pass.offsetWidth; pass.style.animation=''; }
     setTimeout(()=>pw.scrollIntoView({behavior:prefersReduce?'auto':'smooth', block:'nearest'}), 120);
+    fetchLive(d, seq);
   }
 
   $('go').addEventListener('click', spin);

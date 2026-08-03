@@ -1,0 +1,9 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+# 프론트에서 /api/tago 로 호출하면 함수로 연결
+[[redirects]]
+  from = "/api/tago"
+  to = "/.netlify/functions/tago"
+  status = 200
