@@ -59,7 +59,22 @@ index.html                    프론트 (정적, 그대로 열어도 동작)
 og.png                        공유 미리보기 이미지 (1200×630)
 netlify.toml                  Netlify 설정 (/api/tago → 함수)
 netlify/functions/tago.js     TAGO 프록시 (API 키를 서버에만 보관)
+tests/                        자동 검증 스위트 (배포에는 포함되지 않음)
 ```
+
+## 테스트
+
+배포 전에 실제 브라우저로 동작을 확인합니다.
+
+```
+cd tests
+npm install     # 처음 한 번 (Chromium 함께 내려받음)
+npm test        # 전체 123개, 약 70초
+npm run test:data   # 데이터 정합성만, 네트워크 없이 1초
+```
+
+목적지·좌표·볼거리를 고쳤을 때는 `npm run test:data` 만으로도 대부분 걸립니다.
+자세한 내용은 [tests/README.md](tests/README.md) 를 보세요.
 
 배포 주소: <https://randomtago.netlify.app/>
 

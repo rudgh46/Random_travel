@@ -1,0 +1,20 @@
+{
+  "name": "randomtago-tests",
+  "version": "1.0.0",
+  "private": true,
+  "description": "오늘의 랜덤 여행 — 자동 검증 스위트",
+  "scripts": {
+    "test": "node run.js",
+    "test:data": "node run.js data",
+    "test:ui": "node run.js ui",
+    "test:weather": "node run.js weather",
+    "test:schedule": "node run.js schedule",
+    "postinstall": "playwright install chromium"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
