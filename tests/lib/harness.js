@@ -14,10 +14,31 @@ const MIME = {
 
 // file:// 은 localStorage·clipboard·history 에 제약이 있어 로컬 서버로 띄운다.
 // 포트는 0(OS 자동 할당)으로 열어 다른 프로세스와 충돌하지 않게 한다.
-function startServer() {
-  const srv = http.createServer((req, res) => {
-    const rel = decodeURIComponent(req.url.split('?')[0]);
-    const file = path.join(ROOT, rel);
+//
+// withFunction: true 면 /api/tago 를 실제 Netlify 함수로 연결한다
+// (netlify.toml 의 리다이렉트를 로컬에서 재현하는 셈).
+function startServer({ withFunction = false } = {}) {
+  let tago = null;
+  if (withFunction) {
+    tago = require(path.join(ROOT, 'netlify', 'functions', 'tago.js')).handler;
+  }
+
+  const srv = http.createServer(async (req, res) => {
+    const u = new URL(req.url, 'http://localhost');
+
+    if (tago && u.pathname === '/api/tago') {
+      try {
+        const r = await tago({ queryStringParameters: Object.fromEntries(u.searchParams) });
+        res.writeHead(r.statusCode, r.headers);
+        res.end(r.body);
+      } catch (e) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: String(e && e.message) }));
+      }
+      return;
+    }
+
+    const file = path.join(ROOT, decodeURIComponent(u.pathname));
     // 저장소 밖 경로 요청 차단
     if (!file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
     let body;

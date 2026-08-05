@@ -10,9 +10,10 @@ const SUITES = [
   require('./ui.test.js'),
   require('./weather.test.js'),
   require('./schedule.test.js'),
+  require('./live.test.js'),
 ];
 
-const FILES = ['data', 'ui', 'weather', 'schedule'];
+const FILES = ['data', 'ui', 'weather', 'schedule', 'live'];
 
 (async () => {
   const args = process.argv.slice(2).map(s => s.toLowerCase());
@@ -25,7 +26,22 @@ const FILES = ['data', 'ui', 'weather', 'schedule'];
     process.exit(2);
   }
 
-  const needsBrowser = picked.some(s => s.needsBrowser);
+  // 조건이 안 갖춰진 스위트는 건너뛴다(예: TAGO_KEY 없음)
+  const skipped = [];
+  const runnable = picked.filter(s => {
+    const why = s.skipReason && s.skipReason();
+    if (why) { skipped.push({ name: s.name, why }); return false; }
+    return true;
+  });
+
+  if (!runnable.length) {
+    skipped.forEach(s => console.log(`  건너뜀: ${s.name} — ${s.why}`));
+    console.log('\n실행할 스위트가 없습니다.\n');
+    process.exit(0);
+  }
+
+  const needsBrowser = runnable.some(s => s.needsBrowser);
+  const withFunction = runnable.some(s => s.needsFunction);
   let browser, server;
 
   if (needsBrowser) {
@@ -35,7 +51,7 @@ const FILES = ['data', 'ui', 'weather', 'schedule'];
       console.error('\nplaywright 가 없습니다. tests 폴더에서 `npm install` 을 먼저 실행하세요.');
       process.exit(2);
     }
-    server = await startServer();
+    server = await startServer({ withFunction });
     try { browser = await chromium.launch(); }
     catch (e) {
       console.error(`\n브라우저를 띄우지 못했습니다: ${e.message}`);
@@ -48,7 +64,7 @@ const FILES = ['data', 'ui', 'weather', 'schedule'];
   const started = Date.now();
   const results = [];
 
-  for (const suite of picked) {
+  for (const suite of runnable) {
     const t = reporter(suite.name);
     try {
       await suite.run(t, needsBrowser ? { browser, url: server.url, base: server.base } : {});
@@ -70,6 +86,7 @@ const FILES = ['data', 'ui', 'weather', 'schedule'];
     const mark = r.fail ? 'FAIL' : ' OK ';
     console.log(`  [${mark}] ${r.name.padEnd(28)} ${r.pass} 통과${r.fail ? ` / ${r.fail} 실패` : ''}`);
   }
+  for (const s of skipped) console.log(`  [건너뜀] ${s.name.padEnd(28)} ${s.why}`);
   console.log('='.repeat(52));
   console.log(`  합계 ${pass} 통과 / ${fail} 실패 · ${secs}초`);
 

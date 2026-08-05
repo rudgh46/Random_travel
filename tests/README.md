@@ -21,6 +21,17 @@ npm run test:data     정적 데이터만 (브라우저·네트워크 불필요,
 npm run test:ui       UI·공유·접근성만 (네트워크 불필요)
 npm run test:weather  날씨·비 필터
 npm run test:schedule 출발 일시·도착 예정
+npm run test:live     TAGO 실제 배차 (TAGO_KEY 필요)
+```
+
+`live` 스위트는 인증키가 필요합니다. 없으면 자동으로 건너뜁니다.
+
+```
+# PowerShell
+$env:TAGO_KEY="발급받은_인코딩_키"; npm test
+
+# bash
+TAGO_KEY="발급받은_인코딩_키" npm test
 ```
 
 마지막 줄에 합계가 나오고, 실패가 있으면 목록이 함께 출력됩니다.
@@ -34,6 +45,10 @@ npm run test:schedule 출발 일시·도착 예정
 | `ui.test.js` | 볼거리 패널, 공유·딥링크, 필터 기억, 연속 중복 방지, 접근성, 모바일 레이아웃 | 불필요 |
 | `weather.test.js` | 날씨 표시·캐시·경합·실패 처리, 비 필터, 추천 문구 | **필요** |
 | `schedule.test.js` | 출발 일시 기본값·범위, 도착 시각 계산, 날짜별 날씨, 링크 복원 | **필요** |
+| `live.test.js` | `/api/tago` 프록시, 실제 배차 표시, 터미널 ID 후보 순회, 장애 시 처리 | **필요** + `TAGO_KEY` |
+
+`live` 스위트를 돌릴 때는 하네스가 `/api/tago` 를 실제 Netlify 함수로 연결합니다
+(`netlify.toml` 의 리다이렉트를 로컬에서 재현).
 
 `lib/harness.js` 는 공용 도구입니다 — 정적 서버(포트 자동 할당), 결과 리포터,
 `index.html` 에서 데이터 블록을 뽑아내는 함수.
@@ -59,6 +74,9 @@ npm run test:schedule 출발 일시·도착 예정
 - 공유 링크의 `?t=99:99` 가 `\d{2}:\d{2}` 검증을 통과해 브라우저가 값을
   거부하고 입력칸이 빈 상태로 남았다
 - 승차권의 "다시 뽑기" 글씨가 종이색 배경 위에서 대비 1.03:1 이었다
+- TAGO 복구 직후, `depPlandTime` 이 숫자로 와서 시각 표시가 깨지고 정렬이
+  `localeCompare` 에서 예외를 던졌다
+- 센트럴시티(서울)의 터미널 ID 를 하나만 골라 호남선 목적지가 전부 0편이었다
 
 ## 배포에는 영향 없음
 

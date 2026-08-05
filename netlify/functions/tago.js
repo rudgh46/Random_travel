@@ -47,6 +47,12 @@ function encodedKey(key) {
   return k.includes("%") ? k : encodeURIComponent(k);
 }
 
+// 노선 조회 시 시도할 터미널 ID 후보 수 상한.
+// 같은 이름에 ID가 여러 개라 조합을 시도해야 하지만, 요청이 무한히 늘지 않게 제한한다.
+const MAX_DEP_CANDS = 3;
+const MAX_ARR_CANDS = 2;
+const MAX_ROUTE_TRIES = 6;
+
 // 허용 오퍼레이션 화이트리스트 (임의 URL 프록시 남용 방지)
 const ALLOWED_OPS = new Set([
   OP_TERMINALS,
@@ -130,13 +136,26 @@ async function callTago(op, params, key) {
   return items == null ? [] : Array.isArray(items) ? items : [items];
 }
 
-// 이름(terminalNm)으로 터미널 검색 → 후보 중 최적 하나 선택
+// 이름(terminalNm)으로 터미널 검색 → 점수 순 후보 목록
 // 이 API는 terminalNm 파라미터로 부분일치 검색을 지원한다(전체 목록 조회는 안 됨).
-async function searchTerminal(query, key, prefer) {
+//
+// 중요: 같은 이름에 터미널 ID가 여러 개 있고, 노선에 따라 유효한 ID가 다르다.
+//   NAEK020 센트럴시티(서울) → 목포 0편
+//   NAEK021 센트럴시티(서울) → 목포 15편
+//   동서울은 NAEK030/031/032/035 네 개
+// 그래서 하나만 고르면 노선 조회가 빈 결과로 나온다. 후보를 돌려주고
+// 호출부에서 결과가 있는 조합을 찾는다.
+async function searchTerminals(query, key, prefer, limit = 3) {
   const q = query.replace(/[·\s]/g, "");
   const items = await callTago(OP_TERMINALS, { terminalNm: q, numOfRows: "50" }, key);
-  const cand = items.map((t) => ({ id: t.terminalId, name: t.terminalNm }));
-  if (cand.length === 0) return null;
+  const seen = new Set();
+  const cand = [];
+  for (const t of items) {
+    if (!t.terminalId || seen.has(t.terminalId)) continue;
+    seen.add(t.terminalId);
+    cand.push({ id: t.terminalId, name: t.terminalNm });
+  }
+  if (cand.length === 0) return [];
   const score = (t) => {
     const n = (t.name || "").replace(/\s/g, "");
     let s = 0;
@@ -148,7 +167,7 @@ async function searchTerminal(query, key, prefer) {
     return s;
   };
   cand.sort((a, b) => score(b) - score(a));
-  return cand[0];
+  return cand.slice(0, limit);
 }
 
 exports.handler = async (event) => {
@@ -259,29 +278,52 @@ exports.handler = async (event) => {
     if (p.mode === "route") {
       if (!p.arr) return json(400, { error: "arr(도착지 이름) 파라미터가 필요합니다." });
 
-      // 출발지 힌트: 여러 후보를 순서대로 시도 (예: 서울경부, 센트럴시티)
-      const depHints = (p.depHint || "서울경부").split(",").map((s) => s.trim());
-      let dep = null;
+      // 출발지 힌트를 순서대로 검색해 후보를 모은다 (예: 센트럴시티, 서울호남)
+      const depHints = (p.depHint || "서울경부").split(",").map((s) => s.trim()).filter(Boolean);
+      const depCands = [];
+      const seenDep = new Set();
       for (const h of depHints) {
-        dep = await searchTerminal(h, key, "서울");
-        if (dep) break;
+        for (const c of await searchTerminals(h, key, "서울")) {
+          if (seenDep.has(c.id)) continue;
+          seenDep.add(c.id);
+          depCands.push(c);
+        }
+        if (depCands.length >= MAX_DEP_CANDS) break;
       }
-      const arr = await searchTerminal(p.arr, key);
-      if (!dep || !arr) {
+      const arrCands = await searchTerminals(p.arr, key, null, MAX_ARR_CANDS);
+
+      if (depCands.length === 0 || arrCands.length === 0) {
         return json(404, {
           error: "터미널 ID를 찾지 못했습니다.",
-          depResolved: dep || null,
-          arrResolved: arr || null,
+          depCandidates: depCands,
+          arrCandidates: arrCands,
         });
       }
 
-      const params = { depTerminalId: dep.id, arrTerminalId: arr.id };
-      if (p.date) params.depPlandTime = p.date; // YYYYMMDD (미지정 시 API 기본)
+      // 같은 이름에 ID가 여러 개이므로, 결과가 나오는 조합을 찾을 때까지 시도한다.
+      let hit = null;
+      const tried = [];
+      outer:
+      for (const dep of depCands.slice(0, MAX_DEP_CANDS)) {
+        for (const arr of arrCands) {
+          const params = { depTerminalId: dep.id, arrTerminalId: arr.id };
+          if (p.date) params.depPlandTime = p.date; // YYYYMMDD (미지정 시 API 기본)
+          const items = await callTago(OP_ROUTE, params, key);
+          tried.push(`${dep.id}>${arr.id}:${items.length}`);
+          if (items.length > 0) { hit = { dep, arr, items }; break outer; }
+          if (tried.length >= MAX_ROUTE_TRIES) break outer;
+        }
+      }
 
-      const items = await callTago(OP_ROUTE, params, key);
+      const dep = hit ? hit.dep : depCands[0];
+      const arr = hit ? hit.arr : arrCands[0];
+      const items = hit ? hit.items : [];
+
+      // depPlandTime 은 숫자(202608050600)로 오기도 한다. 문자열로 고정해
+      // 프론트엔드가 길이·정렬을 안전하게 다룰 수 있게 한다.
       const trips = items.map((it) => ({
-        dep: it.depPlandTime, // 보통 YYYYMMDDHHmm
-        arr: it.arrPlandTime,
+        dep: it.depPlandTime == null ? null : String(it.depPlandTime), // YYYYMMDDHHmm
+        arr: it.arrPlandTime == null ? null : String(it.arrPlandTime),
         grade: it.gradeNm,
         charge: Number(it.charge) || null,
         routeId: it.routeId,
@@ -291,6 +333,7 @@ exports.handler = async (event) => {
         arrTerminal: arr,
         count: trips.length,
         trips,
+        tried, // 진단용: 어떤 ID 조합을 몇 편으로 확인했는지
       });
     }
 

@@ -779,7 +779,10 @@
       $('depTime').value = `${pad(slot.getHours())}:${pad(slot.getMinutes())}`;
     }
   }
-  const hhmm = s => (s && s.length >= 12) ? s.slice(8, 10) + ":" + s.slice(10, 12) : (s || "");
+  // TAGO 의 depPlandTime 은 "202608050600" 형태다. 숫자로 오는 경우도 있어
+  // 문자열로 변환한 뒤 자른다(숫자에는 .length 나 localeCompare 가 없다).
+  const tagoTime = v => (v == null ? "" : String(v));
+  const hhmm = v => { const s = tagoTime(v); return s.length >= 12 ? s.slice(8, 10) + ":" + s.slice(10, 12) : s; };
 
   async function fetchLive(dest, seq) {
     const el = $('passLive');
@@ -800,23 +803,34 @@
       if (seq !== liveSeq) return;            // 더 최근 뽑기가 있으면 무시
       if (!data.trips || data.trips.length === 0) throw new Error('empty');
 
+      // 오늘을 고른 경우에만 "지금 이후" 로 걸러낸다(미래 날짜는 전 편이 대상).
       const now = new Date();
-      const nowKey = yyyymmdd() + String(now.getHours()).padStart(2, '0') + String(now.getMinutes()).padStart(2, '0');
-      const upcoming = data.trips
-        .filter(t => t.dep && t.dep >= nowKey)
+      const nowKey = todayIso().replace(/-/g, '') + pad(now.getHours()) + pad(now.getMinutes());
+      const all = data.trips
+        .map(t => ({ ...t, dep: tagoTime(t.dep), arr: tagoTime(t.arr) }))
+        .filter(t => t.dep)
         .sort((a, b) => a.dep.localeCompare(b.dep));
-      const fares = data.trips.map(t => t.charge).filter(Boolean);
+      const upcoming = depDateVal() === todayIso() ? all.filter(t => t.dep >= nowKey) : all;
+      const fares = all.map(t => t.charge).filter(Boolean);
       const minF = fares.length ? Math.min(...fares) : null;
       const maxF = fares.length ? Math.max(...fares) : null;
+      const isToday = depDateVal() === todayIso();
 
       const next = upcoming[0];
       const parts = [];
-      if (next) parts.push(`다음 출발 <b>${hhmm(next.dep)}</b> (${next.grade || '-'})`);
+      if (next) {
+        const arrTxt = hhmm(next.arr);
+        parts.push(`${isToday ? '다음 출발' : '첫 출발'} <b>${hhmm(next.dep)}</b>`
+          + (arrTxt ? ` → <b>${arrTxt}</b> 도착` : '')
+          + (next.grade ? ` (${next.grade})` : ''));
+      } else if (isToday) {
+        parts.push('오늘 남은 편이 없습니다');
+      }
       if (minF) parts.push(minF === maxF ? `요금 <b>${won(minF)}</b>` : `요금 <b>${won(minF)}~${won(maxF)}</b>`);
-      parts.push(`오늘 <b>${data.trips.length}</b>편`);
+      parts.push(`${isToday ? '오늘' : fmtDateKo(depDateVal())} <b>${all.length}</b>편`);
 
       el.className = 'live';
-      el.innerHTML = `<span class="badge">실시간</span>${parts.join(' · ')}`;
+      el.innerHTML = `<span class="badge">실제 배차</span>${parts.join(' · ')}`;
     } catch (e) {
       if (seq !== liveSeq) return;
       el.hidden = true;                        // 프록시 없거나 실패 → 기본값 카드 유지
