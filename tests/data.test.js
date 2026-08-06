@@ -103,6 +103,10 @@ module.exports = {
       'og:image 가 절대 URL 이다 (일부 크롤러는 상대 경로를 못 읽는다)');
     t.ok(/<meta property="og:url" content="https:\/\//.test(src), 'og:url 이 절대 URL 이다');
     t.ok(/<meta name="twitter:card"/.test(src), 'twitter:card 가 있다');
+    // 뽑을 때마다 ?to=…&d=…&t= 이 주소에 붙으므로 canonical 이 없으면
+    // 같은 페이지가 여러 주소로 색인된다
+    t.ok(/<link rel="canonical" href="https:\/\/[^"?]+\/">/.test(src),
+      'canonical 이 쿼리 없는 주소를 가리킨다');
     const fs2 = require('fs'), p2 = require('path');
     t.ok(fs2.existsSync(p2.join(require('./lib/harness').ROOT, 'og.png')), 'og.png 파일이 저장소에 있다');
   },
