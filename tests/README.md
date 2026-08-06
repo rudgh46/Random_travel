@@ -16,11 +16,12 @@ npm install
 ## 돌리기
 
 ```
-npm test              전체 150개 (약 80초, 네트워크 필요)
+npm test              전체 171개 (약 75초, 네트워크 필요)
 npm run test:data     정적 데이터만 (브라우저·네트워크 불필요, 1초)
 npm run test:ui       UI·공유·접근성만 (네트워크 불필요)
 npm run test:weather  날씨·비 필터
 npm run test:schedule 출발 일시·도착 예정
+npm run test:pages    노선 페이지 생성물 (네트워크 불필요)
 npm run test:live     TAGO 실제 배차 (TAGO_KEY 필요)
 ```
 
@@ -45,7 +46,12 @@ TAGO_KEY="발급받은_인코딩_키" npm test
 | `ui.test.js` | 볼거리 패널, 공유·딥링크, 필터 기억, 연속 중복 방지, 접근성, 모바일 레이아웃 | 불필요 |
 | `weather.test.js` | 날씨 표시·캐시·경합·실패 처리, 비 필터, 추천 문구 | **필요** |
 | `schedule.test.js` | 출발 일시 기본값·범위, 도착 시각 계산, 날짜별 날씨, 링크 복원 | **필요** |
+| `pages.test.js` | 노선 페이지 생성물이 `index.html` 과 일치하는지, 메타·본문·내부링크·sitemap, 외부 API 실패 시 처리 | 불필요 |
 | `live.test.js` | `/api/tago` 프록시, 실제 배차 표시, 터미널 ID 후보 순회, 장애 시 처리 | **필요** + `TAGO_KEY` |
+
+`pages.test.js` 의 첫 항목이 가장 중요합니다. 생성물을 저장소에 커밋하는
+구조라, `index.html` 을 고치고 `node tools/build-pages.js` 를 잊으면 배포된
+페이지만 옛 데이터로 남습니다. 그 상태에서 실패합니다.
 
 `live` 스위트를 돌릴 때는 하네스가 `/api/tago` 를 실제 Netlify 함수로 연결합니다
 (`netlify.toml` 의 리다이렉트를 로컬에서 재현).
@@ -77,6 +83,8 @@ TAGO_KEY="키" node audit-routes.js
 **목적지를 추가했다면** `npm run test:data` 만으로 대부분 걸립니다.
 `DEST` 에 넣고 `COORD`·`SPOTS` 를 빠뜨리면 바로 알려 줍니다.
 바다를 낀 곳이면 `SEASIDE` 에도 넣어야 추천 문구가 맞습니다.
+그다음 `node tools/build-pages.js` 로 노선 페이지를 다시 만들어
+함께 커밋하세요(`npm run test:pages` 가 확인합니다).
 
 **날씨 관련 테스트는 그날 실제 날씨를 씁니다.** 그래서 값(기온 몇 도)이 아니라
 형식과 동작만 검사합니다. 비가 전국에 오는 날이면 "비 안 오는 곳만" 이

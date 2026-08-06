@@ -10,6 +10,10 @@ const MIME = {
   '.png': 'image/png',
   '.md': 'text/markdown; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.xml': 'application/xml; charset=utf-8',
+  '.txt': 'text/plain; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
 };
 
 // file:// 은 localStorage·clipboard·history 에 제약이 있어 로컬 서버로 띄운다.
@@ -38,9 +42,12 @@ function startServer({ withFunction = false } = {}) {
       return;
     }
 
-    const file = path.join(ROOT, decodeURIComponent(u.pathname));
+    let file = path.join(ROOT, decodeURIComponent(u.pathname));
     // 저장소 밖 경로 요청 차단
     if (!file.startsWith(ROOT)) { res.writeHead(403); res.end(); return; }
+    // 폴더 요청은 index.html 로 (Netlify 가 배포 때 해 주는 것과 같은 처리)
+    try { if (fs.statSync(file).isDirectory()) file = path.join(file, 'index.html'); }
+    catch { /* 없으면 아래에서 404 */ }
     let body;
     try { body = fs.readFileSync(file); }
     catch { res.writeHead(404); res.end('not found'); return; }

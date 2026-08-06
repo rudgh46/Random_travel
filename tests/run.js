@@ -10,10 +10,11 @@ const SUITES = [
   require('./ui.test.js'),
   require('./weather.test.js'),
   require('./schedule.test.js'),
+  require('./pages.test.js'),
   require('./live.test.js'),
 ];
 
-const FILES = ['data', 'ui', 'weather', 'schedule', 'live'];
+const FILES = ['data', 'ui', 'weather', 'schedule', 'pages', 'live'];
 
 (async () => {
   const args = process.argv.slice(2).map(s => s.toLowerCase());

@@ -56,10 +56,43 @@ Netlify에 배포하면 TAGO(공공데이터포털) API로 **오늘 실제 출�
 > 클라이언트에서 우회할 방법이 없어 오류신고 후 대기했고, 08-05 에 복구되었습니다.
 > </details>
 
+## 노선별 페이지 (`/노선/…`)
+
+랜덤 뽑기는 자바스크립트로 목적지를 정하기 때문에 검색엔진이 색인할 내용이
+없습니다. "서울에서 강릉 가는 고속버스" 같은 검색으로 들어올 수 있도록
+목적지마다 **실제 HTML 문서**를 만들어 둡니다.
+
+```
+/노선/            99곳을 권역별 표로 정리한 목록
+/노선/강릉/       요금·소요시간·오늘 배차·날씨·근처 볼거리
+```
+
+각 페이지는 고유한 `title`·`description`·`canonical` 과 BreadcrumbList
+구조화 데이터를 갖고, 요금·소요시간·볼거리는 **HTML 에 그대로** 들어 있습니다.
+오늘 배차와 날씨만 페이지 스크립트가 채우며, 실패해도 안내 문구로 마무리되고
+나머지 내용은 그대로 남습니다.
+
+생성은 [`tools/build-pages.js`](tools/build-pages.js) 가 합니다. 데이터는
+`index.html` 한 곳에만 두고 여기서는 읽기만 합니다.
+
+```
+node tools/build-pages.js           99개 페이지 + sitemap.xml + robots.txt 생성
+node tools/build-pages.js --check   생성 결과가 저장소와 같은지만 확인
+```
+
+> **목적지 데이터를 고쳤으면 재생성해서 함께 커밋하세요.** 생성물을 저장소에
+> 커밋하는 이유는 `netlify.toml` 에 빌드 명령을 두지 않기 위해서입니다
+> (배포가 파일 복사라 실패할 여지가 없습니다). 대신 재생성을 잊으면 배포된
+> 페이지만 옛 데이터로 남으므로, `npm run test:pages` 가 그 상태를 잡습니다.
+
 ## 구조
 
 ```
 index.html                    프론트 (정적, 그대로 열어도 동작)
+노선/                         목적지별 정적 페이지 (생성물 · 직접 고치지 말 것)
+assets/dest.css, dest.js      노선 페이지 공용 스타일·스크립트
+sitemap.xml, robots.txt       색인용 (생성물)
+tools/build-pages.js          노선 페이지 생성기
 og.png                        공유 미리보기 이미지 (1200×630)
 netlify.toml                  Netlify 설정 (/api/tago → 함수)
 netlify/functions/tago.js     TAGO 프록시 (API 키를 서버에만 보관)
@@ -73,8 +106,9 @@ tests/                        자동 검증 스위트 (배포에는 포함되지
 ```
 cd tests
 npm install     # 처음 한 번 (Chromium 함께 내려받음)
-npm test        # 전체 150개, 약 80초
-npm run test:data   # 데이터 정합성만, 네트워크 없이 1초
+npm test        # 전체 171개, 약 75초
+npm run test:data    # 데이터 정합성만, 네트워크 없이 1초
+npm run test:pages   # 노선 페이지 생성물이 최신인지 + 실제로 뜨는지
 ```
 
 TAGO 실제 배차 스위트(27개)는 `TAGO_KEY` 환경변수가 있을 때만 돌아가고,
@@ -92,8 +126,9 @@ TAGO_KEY="키" node audit-routes.js
 
 배포 주소: <https://randomtago.netlify.app/>
 
-> 공유 메타(`og:url`, `og:image`)에 위 도메인이 절대 URL로 박혀 있습니다.
-> 도메인을 바꾸면 `index.html` 의 `<head>` 에서 함께 수정해 주세요.
+> 공유 메타(`og:url`, `og:image`)와 노선 페이지의 `canonical`·`sitemap.xml` 에
+> 위 도메인이 절대 URL로 박혀 있습니다. 도메인을 바꾸면 `index.html` 의
+> `<head>` 와 `tools/build-pages.js` 의 `SITE` 를 함께 고친 뒤 재생성하세요.
 
 ## Netlify 배포
 
