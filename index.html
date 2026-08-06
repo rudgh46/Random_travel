@@ -589,7 +589,8 @@
     {n:"예산",   r:"충청 서해안", fare:12700, dur:105, grade:"우등", t:"hn"},
     {n:"안면도", r:"충청 서해안", fare:19200, dur:148, grade:"우등", t:"hn"},
     {n:"논산",   r:"충청 서해안", fare:17000, dur:135, grade:"우등", t:"hn"},
-    {n:"청주",   r:"충청 서해안", fare:12800, dur:112, grade:"우등", t:"hn"},
+    // 청주행 고속버스는 센트럴시티가 아니라 경부터미널에서 출발한다(API 확인)
+    {n:"청주",   r:"충청 서해안", fare:12800, dur:112, grade:"우등", t:"gb"},
     {n:"충주",   r:"충청 서해안", fare:13200, dur:113, grade:"우등", t:"hn"},
     {n:"유성·대전",r:"충청 서해안",fare:16900, dur:160, grade:"우등", t:"hn"},
   ];
@@ -728,6 +729,23 @@
   // 조용히 기본값만 사용한다.
   const API_BASE = "/api/tago";
   const DEP_HINT = { gb: "서울경부", hn: "센트럴시티,서울호남" };
+  // 출발 터미널 ID 고정. 이름으로 찾으면 센트럴시티가 NAEK020/NAEK021 두 개로
+  // 나오는데 노선은 NAEK021 에만 있어 매번 헛조회가 발생한다.
+  const DEP_ID = { gb: "NAEK010", hn: "NAEK021" };
+  // 도착 터미널도 같은 이름이 여러 개면 ID 로 고정한다.
+  //   전주는 NAEK600~604 다섯 개가 모두 "전주"이고 노선은 NAEK602 에만 있다
+  const TAGO_ARR_ID = { "전주": "NAEK602" };
+
+  // TAGO 터미널 이름이 우리 표기와 다른 곳. 그대로 검색하면 터미널을 못 찾아
+  // 사용자에게는 "표가 없음"으로 보인다.
+  //   동송   → 철원 동송읍에 있는 터미널이 TAGO 에는 "철원"(NAEK148)으로 등록됨
+  //            (신철원 NAEK147 은 갈말읍으로 별개 터미널)
+  //   부산서부 → "부산사상"(NAEK703). 부산서부터미널의 소재지 이름이다
+  // 점검은 tests/audit-routes.js 로 전수 확인할 수 있다.
+  const TAGO_ARR = {
+    "동송": "철원",
+    "부산서부": "부산사상",
+  };
   let liveSeq = 0; // 오래된 응답이 최신 카드를 덮어쓰지 않도록
 
   // ── 출발 일시 ──
@@ -784,19 +802,31 @@
   const tagoTime = v => (v == null ? "" : String(v));
   const hhmm = v => { const s = tagoTime(v); return s.length >= 12 ? s.slice(8, 10) + ":" + s.slice(10, 12) : s; };
 
+  // TAGO 배차는 오늘·내일까지만 제공된다. 그 이후 날짜는 어떤 조합을 시도해도
+  // 0편이므로 아예 호출하지 않는다(목적지마다 최대 8회씩 헛요청이 나간다).
+  const TAGO_MAX_AHEAD = 1;
+  function withinTagoRange(iso) {
+    const diff = Math.round((parseIso(iso) - parseIso(todayIso())) / 86400000);
+    return diff >= 0 && diff <= TAGO_MAX_AHEAD;
+  }
+
   async function fetchLive(dest, seq) {
     const el = $('passLive');
     if (!el) return;
+    if (!withinTagoRange(depDateVal())) { el.hidden = true; return; }
     el.hidden = false;
     el.className = 'live loading';
     el.textContent = '실시간 운행정보 불러오는 중…';
     try {
-      const q = new URLSearchParams({
+      const params = {
         mode: "route",
         depHint: DEP_HINT[dest.t] || "서울경부",
-        arr: dest.n.split('·')[0], // "온양·아산" → "온양"
+        arr: TAGO_ARR[dest.n] || dest.n.split('·')[0], // "온양·아산" → "온양"
         date: yyyymmdd(),
-      });
+      };
+      if (DEP_ID[dest.t]) params.depId = DEP_ID[dest.t];
+      if (TAGO_ARR_ID[dest.n]) params.arrId = TAGO_ARR_ID[dest.n];
+      const q = new URLSearchParams(params);
       const res = await fetch(`${API_BASE}?${q}`);
       if (!res.ok) throw new Error('unavailable');
       const data = await res.json();

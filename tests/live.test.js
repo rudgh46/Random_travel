@@ -48,15 +48,34 @@ module.exports = {
       'dep/arr 이 문자열로 정규화되어 온다 (숫자면 .length·localeCompare 가 깨진다)');
     t.ok(body.trips.every(x => /^\d{12}$/.test(x.dep)), 'dep 이 YYYYMMDDHHmm 12자리다');
 
-    t.section('같은 이름에 ID 여러 개인 터미널');
-    // 센트럴시티(서울)는 NAEK020 / NAEK021 두 개이고 노선에 따라 유효한 쪽이 다르다.
-    for (const arr of ['목포', '여수']) {
-      const r = await p.request.get(
-        `${url.replace('/index.html', '')}/api/tago?mode=route&depHint=센트럴시티,서울호남&arr=${encodeURIComponent(arr)}`);
-      const j = await r.json();
-      t.info(`${arr}: ${j.count}편, dep=${j.depTerminal?.id}, 시도 ${JSON.stringify(j.tried)}`);
-      t.ok(j.count > 0, `${arr} 노선을 찾아낸다 (후보 ID 를 순회해서)`);
+    t.section('이름이 겹치는 터미널 해석');
+    // 실제로 "표가 없다"로 보이던 사례들. 회귀하면 사용자에게 그대로 노출된다.
+    const route = qs => p.request.get(`${url.replace('/index.html', '')}/api/tago?${qs}`).then(r => r.json());
+    const HN = 'depHint=센트럴시티,서울호남&depId=NAEK021';
+    const GB = 'depHint=서울경부&depId=NAEK010';
+    const cases = [
+      ['목포', `${HN}&arr=목포`, 'NAEK505', '센트럴시티가 NAEK020/021 두 개'],
+      ['여수', `${HN}&arr=여수`, 'NAEK510', '같은 사유'],
+      ['광주', `${HN}&arr=광주`, 'NAEK500', '"광주(유·스퀘어)" 괄호 때문에 광주비아가 이기던 문제'],
+      ['전주', `${HN}&arr=전주&arrId=NAEK602`, 'NAEK602', '"전주" 가 NAEK600~604 다섯 개'],
+      ['청주', `${GB}&arr=청주`, 'NAEK400', '호남선이 아니라 경부터미널 출발'],
+      ['동송', `${GB}&arr=철원`, 'NAEK148', 'TAGO 에 "동송" 이 없고 "철원" 으로 등록됨'],
+      ['부산서부', `${GB}&arr=부산사상`, 'NAEK703', 'TAGO 에는 "부산사상" 으로 등록됨'],
+    ];
+    for (const [label, qs, expectId, why] of cases) {
+      const j = await route(`mode=route&${qs}`);
+      t.info(`${label}: ${j.count}편 → ${j.arrTerminal?.id} ${j.arrTerminal?.name} (${why})`);
+      t.ok(j.count > 0 && j.arrTerminal?.id === expectId,
+        `${label} 이 ${expectId} 로 해석되고 노선이 있다`);
     }
+
+    t.section('터미널 ID 고정');
+    const pinned = await route(`mode=route&${HN}&arr=광주`);
+    t.info(`시도: ${JSON.stringify(pinned.tried)}`);
+    t.ok(pinned.tried && pinned.tried.length === 1,
+      `depId 를 주면 조합 시도가 1회로 끝난다 (${pinned.tried?.length}회)`);
+    const bogus = await route('mode=route&depId=NOT_AN_ID&depHint=서울경부&arr=대전');
+    t.ok(bogus.count > 0, '형식이 잘못된 depId 는 무시하고 이름 검색으로 넘어간다');
 
     t.section('오늘');
     await p.goto(`${url}?to=${encodeURIComponent('대전')}`);

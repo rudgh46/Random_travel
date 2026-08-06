@@ -49,9 +49,11 @@ function encodedKey(key) {
 
 // 노선 조회 시 시도할 터미널 ID 후보 수 상한.
 // 같은 이름에 ID가 여러 개라 조합을 시도해야 하지만, 요청이 무한히 늘지 않게 제한한다.
+// 도착지는 같은 이름이 여러 개인 경우가 흔하다. 전주는 NAEK600~604 다섯 개가
+// 모두 "전주"인데 실제 노선은 NAEK602 에만 있어, 후보를 넉넉히 시도해야 한다.
 const MAX_DEP_CANDS = 3;
-const MAX_ARR_CANDS = 2;
-const MAX_ROUTE_TRIES = 6;
+const MAX_ARR_CANDS = 4;
+const MAX_ROUTE_TRIES = 8;
 
 // 허용 오퍼레이션 화이트리스트 (임의 URL 프록시 남용 방지)
 const ALLOWED_OPS = new Set([
@@ -145,25 +147,33 @@ async function callTago(op, params, key) {
 //   동서울은 NAEK030/031/032/035 네 개
 // 그래서 하나만 고르면 노선 조회가 빈 결과로 나온다. 후보를 돌려주고
 // 호출부에서 결과가 있는 조합을 찾는다.
+// 괄호 안 부가 표기와 가운뎃점을 떼고 비교한다.
+// "광주(유·스퀘어)" 가 광주 고속버스터미널인데, 괄호를 그대로 두고 비교하면
+// 정확일치로 인정되지 않아 "광주비아" 같은 짧은 정류소가 이긴다.
+const baseName = (s) => (s || "").replace(/\([^)]*\)/g, "").replace(/[·\s]/g, "");
+
 async function searchTerminals(query, key, prefer, limit = 3) {
-  const q = query.replace(/[·\s]/g, "");
+  const q = baseName(query);
   const items = await callTago(OP_TERMINALS, { terminalNm: q, numOfRows: "50" }, key);
   const seen = new Set();
   const cand = [];
   for (const t of items) {
     if (!t.terminalId || seen.has(t.terminalId)) continue;
+    // "_수수료" 는 정산용 더미 항목, "시외" 는 다른 서비스의 터미널이다
+    if (/_수수료|시외/.test(t.terminalNm || "")) continue;
     seen.add(t.terminalId);
     cand.push({ id: t.terminalId, name: t.terminalNm });
   }
   if (cand.length === 0) return [];
   const score = (t) => {
-    const n = (t.name || "").replace(/\s/g, "");
+    const b = baseName(t.name);
     let s = 0;
-    if (n === q) s += 8;
-    if (n.startsWith(q)) s += 5;
-    if (prefer && n.includes(prefer)) s += 3;
-    if (/(종합|고속|터미널)/.test(n)) s += 1;
-    s -= n.length * 0.05; // 짧을수록 가점
+    if (b === q) s += 10;
+    else if (b.startsWith(q)) s += 5;
+    else if (b.includes(q)) s += 2;
+    if (prefer && (t.name || "").includes(prefer)) s += 3;
+    if (/고속/.test(t.name || "")) s += 1;
+    s -= b.length * 0.05; // 같은 점수면 짧은 쪽을 먼저
     return s;
   };
   cand.sort((a, b) => score(b) - score(a));
@@ -278,19 +288,34 @@ exports.handler = async (event) => {
     if (p.mode === "route") {
       if (!p.arr) return json(400, { error: "arr(도착지 이름) 파라미터가 필요합니다." });
 
-      // 출발지 힌트를 순서대로 검색해 후보를 모은다 (예: 센트럴시티, 서울호남)
-      const depHints = (p.depHint || "서울경부").split(",").map((s) => s.trim()).filter(Boolean);
+      // depId / arrId 로 터미널을 직접 지정하면 검색과 조합 시도를 건너뛴다.
+      // 서울 출발은 NAEK010(경부) · NAEK021(호남)로 고정할 수 있어 호출이 줄어든다.
+      // (같은 이름의 NAEK020 은 노선이 없어 매번 헛시도가 된다)
+      const ID_RE = /^NAEK\d{3,4}$/;
       const depCands = [];
-      const seenDep = new Set();
-      for (const h of depHints) {
-        for (const c of await searchTerminals(h, key, "서울")) {
-          if (seenDep.has(c.id)) continue;
-          seenDep.add(c.id);
-          depCands.push(c);
+      const arrCands = [];
+
+      if (p.depId && ID_RE.test(p.depId)) {
+        depCands.push({ id: p.depId, name: p.depHint || p.depId });
+      } else {
+        // 출발지 힌트를 순서대로 검색해 후보를 모은다 (예: 센트럴시티, 서울호남)
+        const depHints = (p.depHint || "서울경부").split(",").map((s) => s.trim()).filter(Boolean);
+        const seenDep = new Set();
+        for (const h of depHints) {
+          for (const c of await searchTerminals(h, key, "서울")) {
+            if (seenDep.has(c.id)) continue;
+            seenDep.add(c.id);
+            depCands.push(c);
+          }
+          if (depCands.length >= MAX_DEP_CANDS) break;
         }
-        if (depCands.length >= MAX_DEP_CANDS) break;
       }
-      const arrCands = await searchTerminals(p.arr, key, null, MAX_ARR_CANDS);
+
+      if (p.arrId && ID_RE.test(p.arrId)) {
+        arrCands.push({ id: p.arrId, name: p.arr || p.arrId });
+      } else {
+        arrCands.push(...await searchTerminals(p.arr, key, null, MAX_ARR_CANDS));
+      }
 
       if (depCands.length === 0 || arrCands.length === 0) {
         return json(404, {
