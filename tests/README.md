@@ -22,6 +22,7 @@ npm run test:ui       UI·공유·접근성만 (네트워크 불필요)
 npm run test:weather  날씨·비 필터
 npm run test:schedule 출발 일시·도착 예정
 npm run test:pages    노선 페이지 생성물 (네트워크 불필요)
+npm run test:count    뽑기 횟수 카운터 (네트워크 불필요)
 npm run test:live     TAGO 실제 배차 (TAGO_KEY 필요)
 ```
 
@@ -47,6 +48,7 @@ TAGO_KEY="발급받은_인코딩_키" npm test
 | `weather.test.js` | 날씨 표시·캐시·경합·실패 처리, 비 필터, 추천 문구 | **필요** |
 | `schedule.test.js` | 출발 일시 기본값·범위, 도착 시각 계산, 날짜별 날씨, 링크 복원 | **필요** |
 | `pages.test.js` | 노선 페이지 생성물이 `index.html` 과 일치하는지, 메타·본문·내부링크·sitemap, 외부 API 실패 시 처리 | 불필요 |
+| `count.test.js` | 뽑기 횟수 카운터 — 저장소 미설정·장애 시 사이트가 멀쩡한지, 100회 미만 숨김, 목적지 이름 검증 | 불필요 |
 | `live.test.js` | `/api/tago` 프록시, 실제 배차 표시, 터미널 ID 후보 순회, 장애 시 처리 | **필요** + `TAGO_KEY` |
 
 `pages.test.js` 의 첫 항목이 가장 중요합니다. 생성물을 저장소에 커밋하는
@@ -109,6 +111,8 @@ TAGO_KEY="키" node audit-routes.js
 - 전주가 이름이 같은 터미널 5개 중 노선이 없는 쪽으로 해석되었다
 - 청주가 호남선으로 분류되어 있었다 (실제로는 경부터미널 출발)
 - 동송·부산서부가 TAGO 표기와 달라 터미널 해석에 실패했다
+- 카운터의 목적지 이름 검증이 `\s` 를 써서 개행·탭이 통과했다 — 그 값이 Redis
+  키에 들어가므로 제어문자가 섞일 수 있었다
 
 ## 배포에는 영향 없음
 

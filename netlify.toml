@@ -7,3 +7,9 @@
   from = "/api/tago"
   to = "/.netlify/functions/tago"
   status = 200
+
+# 뽑기 횟수 카운터
+[[redirects]]
+  from = "/api/count"
+  to = "/.netlify/functions/count"
+  status = 200

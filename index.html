@@ -86,6 +86,14 @@
   .clockrow .dot{width:7px;height:7px;border-radius:50%;background:var(--go);box-shadow:0 0 8px var(--go);animation:pulse 1.6s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:.4}50%{opacity:1}}
 
+  /* 누적 뽑기 횟수. 집계가 적을 때는 서버가 숫자를 내려보내지 않으므로
+     이 줄은 계속 숨어 있다(한 자리 수가 찍히면 없는 것보다 나쁘다). */
+  /* flex 로 두면 텍스트 조각마다 gap 이 붙어 "12,847 번" 처럼 벌어진다.
+     구분점에만 여백을 준다. */
+  .tally{margin-top:12px;font-size:12.5px;color:var(--muted);line-height:1.7}
+  .tally b{color:var(--amber);font-family:'Space Mono',monospace;font-weight:700;margin:0 2px}
+  .tally .sep{opacity:.4;margin:0 8px}
+
   /* ---- board ---- */
   .board{
     width:100%;max-width:760px;
@@ -366,6 +374,7 @@
     <h1>오늘, <span class="hl">어디로든</span><br>떠나볼까요</h1>
     <p class="sub">버튼 한 번이면 목적지가 정해집니다. 고민은 안내판에 맡기세요.</p>
     <div class="clockrow"><span class="dot"></span><span id="now">--:--</span><span>KST</span><span id="today"></span></div>
+    <p class="tally" id="tally" hidden></p>
   </header>
 
   <main class="board">
@@ -1203,6 +1212,7 @@
 
     const pick = choose(candidates);
     remember(pick);
+    countSpin(pick);   // 공유 링크로 들어온 경우는 세지 않는다(여기는 실제 뽑기만 지난다)
     const flap = $('flap'), prompt = $('prompt'), tag = $('regionTag');
     prompt.style.display='none'; flap.style.display='block';
     flap.setAttribute('aria-hidden', 'true');   // 롤링 중 낭독 방지
@@ -1391,6 +1401,39 @@
     recent.push(pick.n);
     if(recent.length > RECENT_MAX * 2) recent.splice(0, recent.length - RECENT_MAX * 2);
   }
+
+  // ── 누적 뽑기 횟수 ──
+  // /api/count 가 없거나(로컬·저장소 미설정) 집계가 적으면 아무것도 그리지 않는다.
+  // visible 판단은 서버가 한다 — 기준을 프론트에 두면 숫자를 내려보낸 뒤 감추는
+  // 셈이라, 개발자도구로 보이는 것과 화면이 달라진다.
+  const COUNT_API = "/api/count";
+
+  function renderTally(d){
+    const el = $('tally');
+    if(!el) return;
+    if(!d || !d.enabled || !d.visible || !d.total){ el.hidden = true; return; }
+    const parts = [`지금까지 <b>${d.total.toLocaleString('ko-KR')}</b>번 뽑혔어요`];
+    if(d.top && d.top.n) parts.push(`가장 많이 뽑힌 곳 <b>${d.top.n}</b>`);
+    el.innerHTML = parts.join('<span class="sep">·</span>');
+    el.hidden = false;
+  }
+
+  async function loadTally(){
+    try{
+      const res = await fetch(COUNT_API);
+      if(!res.ok) return;                       // 프록시 없음 → 조용히 무시
+      renderTally(await res.json());
+    }catch(e){ /* 집계는 없어도 되는 정보다 */ }
+  }
+
+  async function countSpin(pick){
+    try{
+      const res = await fetch(`${COUNT_API}?to=${encodeURIComponent(pick.n)}`, { method: 'POST' });
+      if(!res.ok) return;
+      renderTally(await res.json());
+    }catch(e){ /* 무시 */ }
+  }
+  loadTally();
 
   // ── 공유 ──
   // 목적지 + 출발 일시를 링크에 담는다

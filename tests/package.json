@@ -10,6 +10,7 @@
     "test:weather": "node run.js weather",
     "test:schedule": "node run.js schedule",
     "test:pages": "node run.js pages",
+    "test:count": "node run.js count",
     "test:live": "node run.js live",
     "postinstall": "playwright install chromium"
   },

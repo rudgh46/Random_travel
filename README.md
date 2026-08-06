@@ -56,6 +56,32 @@ Netlify에 배포하면 TAGO(공공데이터포털) API로 **오늘 실제 출�
 > 클라이언트에서 우회할 방법이 없어 오류신고 후 대기했고, 08-05 에 복구되었습니다.
 > </details>
 
+## 누적 뽑기 횟수 (선택 기능)
+
+머리말 아래에 `지금까지 12,847번 뽑혔어요 · 가장 많이 뽑힌 곳 강릉` 이 표시됩니다.
+**집계가 100회 미만이면 이 줄은 나타나지 않습니다.** 한 자리 수가 찍혀 있으면
+없는 것보다 나쁘기 때문이고, 기준 판단은 서버가 합니다 — 프론트에서 감추면
+개발자도구에 보이는 값과 화면이 달라집니다.
+
+저장소는 [Upstash Redis](https://upstash.com) 의 REST API 를 씁니다.
+
+- HTTP 로 직접 호출되므로 **npm 의존성이 필요 없습니다.** 저장소 루트에
+  `package.json` 을 두면 Netlify 가 배포할 때 `npm install` 을 돌리는데,
+  지금은 빌드 없이 파일만 올리는 구조라 그걸 유지하려는 것입니다.
+- `INCR`·`ZINCRBY` 가 원자적이라 동시 요청에도 숫자가 어긋나지 않습니다.
+
+환경변수 두 개를 Netlify 에 등록하면 켜집니다. **없으면 `{enabled:false}` 만
+돌려주고 그 줄은 그려지지 않습니다** — TAGO 프록시와 같은 규약입니다.
+
+```
+UPSTASH_REDIS_REST_URL
+UPSTASH_REDIS_REST_TOKEN
+```
+
+공유 링크로 들어온 방문은 세지 않습니다(실제 뽑기만 집계). 누구나 호출할 수 있는
+경로라 같은 IP 의 2초 내 연속 기록은 흘려보냅니다. 재미용 집계라 조작을 완전히
+막지는 못하지만, 뽑기를 연달아 눌렀을 때 과하게 세는 것은 막습니다.
+
 ## 노선별 페이지 (`/노선/…`)
 
 랜덤 뽑기는 자바스크립트로 목적지를 정하기 때문에 검색엔진이 색인할 내용이
@@ -94,8 +120,9 @@ assets/dest.css, dest.js      노선 페이지 공용 스타일·스크립트
 sitemap.xml, robots.txt       색인용 (생성물)
 tools/build-pages.js          노선 페이지 생성기
 og.png                        공유 미리보기 이미지 (1200×630)
-netlify.toml                  Netlify 설정 (/api/tago → 함수)
+netlify.toml                  Netlify 설정 (/api/* → 함수)
 netlify/functions/tago.js     TAGO 프록시 (API 키를 서버에만 보관)
+netlify/functions/count.js    누적 뽑기 횟수 (Upstash Redis, 미설정 시 비활성)
 tests/                        자동 검증 스위트 (배포에는 포함되지 않음)
 ```
 
@@ -109,6 +136,7 @@ npm install     # 처음 한 번 (Chromium 함께 내려받음)
 npm test        # 전체 171개, 약 75초
 npm run test:data    # 데이터 정합성만, 네트워크 없이 1초
 npm run test:pages   # 노선 페이지 생성물이 최신인지 + 실제로 뜨는지
+npm run test:count   # 뽑기 횟수 카운터 (저장소 없이도 도는지)
 ```
 
 TAGO 실제 배차 스위트(27개)는 `TAGO_KEY` 환경변수가 있을 때만 돌아가고,
@@ -135,12 +163,18 @@ TAGO_KEY="키" node audit-routes.js
 1. 이 저장소를 GitHub에 push
 2. Netlify에서 **Add new site → Import an existing project** → 저장소 선택
 3. 빌드 설정은 비워두면 됩니다 (`netlify.toml`이 publish=`.`, functions 경로를 지정)
-4. **Site settings → Environment variables** 에 API 키 등록
-   - Key: `TAGO_KEY`
-   - Value: 공공데이터포털의 **Encoding(일반 인증키, 인코딩)** 값 권장
+4. **Site settings → Environment variables** 에 키 등록
+   - `TAGO_KEY` — 공공데이터포털의 **Encoding(일반 인증키, 인코딩)** 값 권장
      (`%2B`, `%2F`, `%3D` 가 포함된 형태. 게이트웨이는 이 형태를 인식합니다.
      디코딩 키를 넣어도 함수가 `encodedKey()` 로 보정하지만, 인코딩 키가 안전합니다.)
-5. 배포 후 함수는 `/api/tago` 로 호출됩니다.
+   - `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` — 뽑기 횟수 카운터용(선택).
+     없으면 그 줄만 표시되지 않고 나머지는 그대로 동작합니다.
+5. 배포 후 함수는 `/api/tago`, `/api/count` 로 호출됩니다.
+
+> **환경변수를 바꾸면 재배포가 필요합니다.** Deploys → Trigger deploy.
+> 반영 여부는 `/api/tago?keycheck=1` 로 확인할 수 있습니다(값은 노출되지 않고
+> 길이와 앞뒤 몇 자만 보여 줍니다). 실제로 배포 환경에 옛 키가 남아 있어
+> 로컬 테스트는 전부 통과하는데 사이트만 배차를 못 받는 일이 있었습니다.
 
 > 키는 서버(함수)에서만 읽고 브라우저로는 절대 내려보내지 않습니다.
 > 그래서 프론트 소스에 키가 노출되지 않습니다.
