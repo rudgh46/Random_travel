@@ -21,6 +21,27 @@ module.exports = {
     const badDur = dest.filter(d => !(d.dur > 0 && d.dur < 600));
     t.ok(badDur.length === 0, badDur.length ? `소요시간 이상: ${badDur.map(d => d.n).join(', ')}` : '소요시간이 모두 상식 범위');
 
+    t.section('권역(REGION)');
+    // DEST 의 권역과 선택 목록·코드·설명이 어긋나면 필터가 조용히 0곳이 된다
+    const regions = [...new Set(dest.map(d => d.r))];
+    const options = [...src.matchAll(/<option value="([^"]+)">/g)].map(m => m[1])
+      .filter(v => v !== 'all');
+    const codeKeys = [...extractBlock(src, 'REGION_CODE').matchAll(/"([^"]+)":"/g)].map(m => m[1]);
+    const vibeKeys = [...extractBlock(src, 'REGION_VIBE').matchAll(/"([^"]+)":"/g)].map(m => m[1]);
+
+    t.info(`권역 ${regions.length}개: ${regions.join(' / ')}`);
+    const noOption = regions.filter(r => !options.includes(r));
+    t.ok(noOption.length === 0, noOption.length ? `선택 목록에 없는 권역: ${noOption.join(', ')}` : '모든 권역이 선택 목록에 있다');
+    const deadOption = options.filter(v => !regions.includes(v) && !/^(all|gb|hn|\d+)$/.test(v));
+    t.ok(deadOption.length === 0, deadOption.length ? `해당 목적지가 없는 선택지: ${deadOption.join(', ')}` : '빈 선택지가 없다');
+    const noCode = regions.filter(r => !codeKeys.includes(r));
+    t.ok(noCode.length === 0, noCode.length ? `REGION_CODE 누락: ${noCode.join(', ')}` : '모든 권역에 영문 코드가 있다');
+    const noVibe = regions.filter(r => !vibeKeys.includes(r));
+    t.ok(noVibe.length === 0, noVibe.length ? `REGION_VIBE 누락: ${noVibe.join(', ')}` : '모든 권역에 설명이 있다');
+    const counts = regions.map(r => `${r}:${dest.filter(d => d.r === r).length}`);
+    t.info(`분포 → ${counts.join('  ')}`);
+    t.ok(regions.every(r => dest.filter(d => d.r === r).length >= 3), '권역마다 최소 3곳 이상이다');
+
     t.section('좌표(COORD)');
     const coord = [...extractBlock(src, 'COORD').matchAll(/"([^"]+)":\[(-?[\d.]+),\s*(-?[\d.]+)\]/g)]
       .map(m => ({ n: m[1], lat: +m[2], lon: +m[3] }));

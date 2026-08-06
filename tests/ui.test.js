@@ -116,7 +116,7 @@ module.exports = {
     watch(p4);
     await p4.goto(url);
     await p4.emulateMedia({ reducedMotion: 'reduce' });
-    await p4.selectOption('#region', '수도권근교');
+    await p4.selectOption('#region', '수도권');
     await p4.selectOption('#budget', '10000');
     t.info(`후보: ${(await p4.textContent('#poolCount')).trim()}`);
     const seq = [];
@@ -142,7 +142,7 @@ module.exports = {
     const restored = await p5.evaluate(() => ['term', 'region', 'budget', 'dur']
       .map(id => `${id}=${document.getElementById(id).value}`).join(' '));
     t.info(`복원: ${restored}`);
-    t.ok(restored === 'term=hn region=수도권근교 budget=10000 dur=150', '새로 열어도 필터가 유지된다');
+    t.ok(restored === 'term=hn region=수도권 budget=10000 dur=150', '새로 열어도 필터가 유지된다');
     const dryPersisted = await p5.isChecked('#dryOnly');
     t.ok(dryPersisted === false, '"비 안 오는 곳만"은 의도적으로 저장하지 않는다');
 
