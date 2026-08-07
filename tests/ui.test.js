@@ -110,6 +110,66 @@ module.exports = {
     t.ok(qs.startsWith(`?to=${picked2}&`) && /&d=\d{4}-\d{2}-\d{2}&t=\d{2}:\d{2}/.test(qs),
       '주소창이 결과·출발일시와 동기화된다');
 
+    // ── 돌아오는 편 ──
+    // 예전 판정은 "소요시간 150분 이하면 당일치기" 라는 추측이었다. 지금은 막차에서
+    // 도착 시각을 빼서 실제 체류 시간으로 판정하므로, 출발 시각을 늦추면 결과가 바뀌어야 한다.
+    t.section('돌아오는 편 · 당일치기 판정');
+    const pr = await ctx.newPage();
+    watch(pr);
+    const seePass = async (to, hm) => {
+      await pr.goto(`${url}?to=${encodeURIComponent(to)}&d=2026-08-10&t=${encodeURIComponent(hm)}`);
+      await pr.waitForSelector('#passWrap.show');
+      await pr.waitForTimeout(150);
+      return pr.evaluate(() => ({
+        daytrip: document.getElementById('passDaytrip').textContent.trim(),
+        hidden: document.getElementById('passReturn').hidden,
+        ret: document.getElementById('passReturn').textContent.replace(/\s+/g, ' ').trim(),
+      }));
+    };
+
+    const early = await seePass('강릉', '09:00');
+    t.info(`강릉 09:00 → ${early.daytrip} / ${early.ret}`);
+    t.ok(!early.hidden, '막차 자료가 있으면 돌아오는 편 줄이 보인다');
+    t.ok(/막차 22:00/.test(early.ret), '서울행 막차 시각이 표시된다');
+    t.ok(/현지에서 10시간/.test(early.ret), '현지 체류 시간이 계산된다');
+    t.ok(early.daytrip === '당일치기 좋아요', '아침 출발은 당일치기로 판정한다');
+
+    const late = await seePass('강릉', '18:00');
+    t.info(`강릉 18:00 → ${late.daytrip}`);
+    t.ok(late.daytrip !== early.daytrip, '출발이 늦어지면 판정이 달라진다');
+    t.ok(late.daytrip === '1박 추천 코스', `한 시간 남짓만 남으면 1박을 권한다 (${late.daytrip})`);
+
+    // 막차가 이른 곳은 아침에 나서도 당일치기가 안 된다
+    const jido = await seePass('지도', '09:00');
+    t.info(`지도 09:00 → ${jido.daytrip} / ${jido.ret}`);
+    t.ok(jido.daytrip === '1박 추천 코스', '막차가 이른 곳은 아침 출발이어도 1박을 권한다');
+
+    // 소요시간만 보면 당일치기인데 막차 때문에 아닌 경우가 실제로 잡히는지
+    const dongsong = await seePass('동송', '09:00');
+    t.ok(dongsong.hidden, '역방향 자료가 없는 목적지는 줄을 감춘다');
+    t.ok(dongsong.daytrip.length > 0, '자료가 없어도 소요시간 기준 판정은 남는다');
+
+    // 날짜·시각을 바꾸면 카드를 다시 그리지 않고 그 줄만 갱신된다
+    await pr.fill('#depTime', '20:00');
+    await pr.dispatchEvent('#depTime', 'change');
+    await pr.waitForTimeout(150);
+    const after = await pr.evaluate(() => document.getElementById('passDaytrip').textContent.trim());
+    t.info(`동송 20:00 → ${after}`);
+    t.ok(await pr.isVisible('#passWrap'), '시각을 바꿔도 승차권이 유지된다');
+
+    await pr.goto(`${url}?to=${encodeURIComponent('완도')}&d=2026-08-10&t=06:00`);
+    await pr.waitForSelector('#passWrap.show');
+    await pr.fill('#depTime', '13:00');
+    await pr.dispatchEvent('#depTime', 'change');
+    await pr.waitForTimeout(150);
+    const missed = await pr.evaluate(() => ({
+      daytrip: document.getElementById('passDaytrip').textContent.trim(),
+      ret: document.getElementById('passReturn').textContent.replace(/\s+/g, ' ').trim(),
+    }));
+    t.info(`완도 13:00 → ${missed.daytrip} / ${missed.ret}`);
+    t.ok(missed.daytrip === '당일 귀경은 어려워요', '막차보다 늦게 도착하면 그렇게 알려 준다');
+    t.ok(/어려워요/.test(missed.ret), '돌아오는 편 줄에도 안내가 나온다');
+
     // ── 연속 중복 방지 ──
     t.section('연속 중복 방지');
     const p4 = await ctx.newPage();

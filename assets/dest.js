@@ -31,7 +31,8 @@
     el.innerHTML = '지금은 실시간 배차를 불러오지 못했습니다. 출발편과 잔여석은 ' + KOBUS + '에서 확인하세요.';
   }
 
-  function renderLive(el, trips) {
+  function renderLive(el, trips, opt) {
+    var back = opt && opt.back;
     var now = new Date();
     var nowKey = todayIso().replace(/-/g, '') + pad(now.getHours()) + pad(now.getMinutes());
     var all = trips
@@ -54,6 +55,8 @@
     } else {
       head.push('오늘 남은 편이 없습니다');
     }
+    // 돌아오는 편에서는 "막차 몇 시" 가 핵심 정보다
+    if (back) head.push('오늘 막차 <b>' + hhmm(all[all.length - 1].dep) + '</b>');
     if (minF) head.push('요금 <b>' + (minF === maxF ? won(minF) : won(minF) + '~' + won(maxF)) + '</b>');
     head.push('오늘 <b>' + all.length + '</b>편');
 
@@ -69,27 +72,29 @@
     }).join('');
 
     el.className = 'live';
-    el.innerHTML = '<span class="badge">실제 배차</span>' + head.join(' · ')
-      + '<ul class="trips">' + rows + '</ul>';
+    el.innerHTML = '<span class="badge">' + (back ? '오늘 서울행' : '실제 배차') + '</span>'
+      + head.join(' · ') + '<ul class="trips">' + rows + '</ul>';
   }
 
-  function loadLive() {
-    var el = $('live');
+  // 가는 편과 오는 편은 출발·도착만 뒤집힌 같은 조회다.
+  function loadRoute(elId, cfg, opt) {
+    var el = $(elId);
     if (!el) return;
+    if (!cfg) { el.remove(); return; }          // 역방향 자료가 없는 목적지
     var q = new URLSearchParams({
       mode: 'route',
-      depHint: P.depHint,
-      arr: P.arr,
+      depHint: cfg.depHint,
+      arr: cfg.arr,
       date: todayIso().replace(/-/g, ''),
     });
-    if (P.depId) q.set('depId', P.depId);
-    if (P.arrId) q.set('arrId', P.arrId);
+    if (cfg.depId) q.set('depId', cfg.depId);
+    if (cfg.arrId) q.set('arrId', cfg.arrId);
 
     fetch('/api/tago?' + q)
       .then(function (r) { if (!r.ok) throw new Error('http ' + r.status); return r.json(); })
       .then(function (d) {
         if (!d.trips || !d.trips.length) throw new Error('empty');
-        renderLive(el, d.trips);
+        renderLive(el, d.trips, opt);
       })
       .catch(function () { liveFail(el); });
   }
@@ -168,6 +173,7 @@
       });
   }
 
-  loadLive();
+  loadRoute('live', { depHint: P.depHint, arr: P.arr, depId: P.depId, arrId: P.arrId });
+  loadRoute('back', P.back, { back: true });
   loadWeather();
 })();

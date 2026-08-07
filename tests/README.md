@@ -16,7 +16,7 @@ npm install
 ## 돌리기
 
 ```
-npm test              전체 171개 (약 75초, 네트워크 필요)
+npm test              전체 254개 (약 90초, 네트워크 필요)
 npm run test:data     정적 데이터만 (브라우저·네트워크 불필요, 1초)
 npm run test:ui       UI·공유·접근성만 (네트워크 불필요)
 npm run test:weather  날씨·비 필터
@@ -66,10 +66,15 @@ TAGO_KEY="발급받은_인코딩_키" npm test
 손봤을 때만 돌리면 됩니다.
 
 ```
-TAGO_KEY="키" node audit-routes.js
+TAGO_KEY="키" node audit-routes.js      가는 편 (서울 → 목적지)
+TAGO_KEY="키" node audit-return.js      돌아오는 편 (목적지 → 서울)
 ```
 
-세 가지를 보고합니다.
+`audit-return.js` 는 `RETURN` 의 막차·편수가 지금도 맞는지 봅니다. 막차는
+요일·시기에 따라 달라지므로 30분 넘게 어긋날 때만 보고합니다. 없던 노선이
+생겼거나 있던 노선이 사라진 것도 함께 알려 줍니다.
+
+`audit-routes.js` 는 세 가지를 보고합니다.
 
 - **터미널을 해석하지 못함** — 사용자에게는 "표가 없음"으로 보입니다.
   `index.html` 의 `TAGO_ARR` 에 올바른 이름을 넣으세요.

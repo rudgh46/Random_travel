@@ -89,6 +89,20 @@ module.exports = {
     t.ok(noFare.length === 0, noFare.length
       ? `요금이 본문에 없음: ${noFare.map(p => p.d.n).join(', ')}` : '요금이 모든 페이지 본문에 있다');
 
+    // 막차는 검색 유입의 핵심 문구라 HTML 에 글자로 있어야 한다.
+    // 자료가 없는 곳은 대신 안내가 있어야 하고, 빈 채로 두면 안 된다.
+    const src2 = readIndex();
+    const retNames = new Set([...src2.slice(src2.indexOf('const RETURN = {'))
+      .matchAll(/"([^"]+)":\["NAEK/g)].map(m => m[1]));
+    t.info(`역방향 자료 있는 목적지 ${retNames.size}곳`);
+    const noLast = pages.filter(p => retNames.has(p.d.n) && !/서울 가는 막차/.test(p.html));
+    t.ok(noLast.length === 0, noLast.length
+      ? `막차 제목이 없음: ${noLast.map(p => p.d.n).join(', ')}` : '막차 자료가 있는 곳은 모두 막차 섹션이 있다');
+    const noNotice = pages.filter(p => !retNames.has(p.d.n) && !/자료가 없습니다/.test(p.html));
+    t.ok(noNotice.length === 0, noNotice.length
+      ? `안내가 없음: ${noNotice.map(p => p.d.n).join(', ')}` : '자료가 없는 곳은 안내 문구로 대신한다');
+    t.ok(pages.every(p => /<dt>서울행 막차<\/dt>/.test(p.html)), '정보 표에 막차 칸이 있다');
+
     const badSpots = pages.filter(p =>
       (p.html.match(/<li>\s*<a href="https:\/\/map\.naver\.com/g) || []).length < 2);
     t.ok(badSpots.length === 0, badSpots.length

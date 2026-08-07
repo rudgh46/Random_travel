@@ -53,6 +53,8 @@ h1{
   font-weight:400;letter-spacing:-.02em;line-height:1.25;
 }
 .lead{margin-top:12px;color:#c3cbdc;font-size:1rem}
+.lead.sm{font-size:.95rem;margin-top:14px}
+.lead b{color:var(--amber);font-weight:700}
 
 /* ── 핵심 정보 ── */
 /* 항목이 6개라 열 수를 자동으로 맡기면 마지막 줄에 빈 칸이 남는다.
@@ -63,6 +65,9 @@ h1{
   background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden;
 }
 @media (min-width:620px){ .facts{grid-template-columns:repeat(3,1fr)} }
+/* 항목이 홀수라 마지막 칸이 비는데, 마지막 항목(일정)이 한 줄을 채우게 둔다.
+   요약에 해당하는 값이라 넓게 놓여도 어색하지 않다. */
+.facts > div:last-child{grid-column:1 / -1}
 .facts > div{background:var(--panel);padding:13px 15px}
 .facts dt{font-size:.74rem;color:var(--muted);letter-spacing:.04em}
 .facts dd{margin-top:3px;font-weight:700;font-size:1.02rem}

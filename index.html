@@ -261,6 +261,14 @@
   .live b{color:#b8791a}
   .live.loading{color:#8a7f63}
 
+  /* 돌아오는 편(서울행 막차) */
+  .ret{margin-top:14px;padding-top:12px;border-top:1px dashed var(--paper-line);
+    font-size:13px;color:#443c28;line-height:1.5}
+  .ret b{color:#b8791a}
+  .rbadge{display:inline-block;font-family:'Space Mono',monospace;font-size:10px;
+    letter-spacing:.1em;text-transform:uppercase;color:#fff;background:#5b4a7a;
+    padding:3px 8px;border-radius:6px;margin-right:8px}
+
   .weather{margin-top:14px;padding-top:12px;border-top:1px dashed var(--paper-line);
     font-size:13px;color:#443c28;line-height:1.5}
   .weather.loading{color:#8a7f63}
@@ -488,6 +496,7 @@
           <div class="cell"><div class="k">Region · 권역</div><div class="v" id="passRegion">—</div></div>
         </div>
         <span class="daytrip" id="passDaytrip">—</span>
+        <div class="ret" id="passReturn" hidden></div>
         <div class="weather" id="passWeather" hidden></div>
         <div class="live" id="passLive" hidden></div>
         <div class="pass-actions">
@@ -843,6 +852,65 @@
   const TAGO_ARR = {
     "동송": "철원",
     "부산서부": "부산사상",
+  };
+
+  // ── 돌아오는 편 (목적지 → 서울) ──
+  // [출발 터미널ID, 서울 도착 터미널ID, 막차, 편수]
+  //
+  // 막차·편수는 2026-08-07 조회값이다. 당일치기 판정과 검색 노출용 문구에 쓰고,
+  // 노선 페이지에서는 그날 실제 배차로 덮어쓴다.
+  //
+  // 아래 12곳은 제공처 데이터에 역방향이 아예 없다(가는 편은 있는데 오는 편만 없다).
+  // 서울 터미널 후보 네 곳을 모두 시도해도 0편이라 우리 쪽에서 보정할 방법이 없다.
+  //   고한·사북 횡성 증평 괴산 보은 속리산 울진 봉화 신철원 동송 운천 부안
+  // 이 목적지들은 돌아오는 편 줄을 감추고 코버스로 안내한다.
+  // 점검은 tests/audit-return.js 로 전수 확인할 수 있다.
+  const RETURN = {
+    "강릉":["NAEK200","NAEK010","22:00",23], "속초":["NAEK230","NAEK010","23:00",62],
+    "양양":["NAEK270","NAEK010","23:20",37], "동해":["NAEK210","NAEK010","21:00",17],
+    "삼척":["NAEK220","NAEK010","20:35",17], "원주":["NAEK240","NAEK010","23:00",93],
+    "영월":["NAEK272","NAEK010","16:30",4],  "정선":["NAEK222","NAEK010","18:20",3],
+    "문막":["NAEK245","NAEK010","22:45",38],
+    "대전":["NAEK300","NAEK010","24:00",63], "세종":["NAEK353","NAEK010","23:39",95],
+    "온양·아산":["NAEK340","NAEK010","21:30",39], "공주":["NAEK320","NAEK010","21:20",41],
+    "금산":["NAEK330","NAEK010","18:30",8],  "유구":["NAEK321","NAEK010","15:30",2],
+    "천안":["NAEK310","NAEK010","22:40",115], "부여":["NAEK372","NAEK010","16:00",4],
+    "청양":["NAEK391","NAEK021","19:40",6],  "제천":["NAEK450","NAEK010","20:30",22],
+    "황간":["NAEK440","NAEK010","17:50",3],  "청주":["NAEK400","NAEK010","23:30",96],
+    "충주":["NAEK420","NAEK021","22:10",40], "유성·대전":["NAEK360","NAEK021","24:00",72],
+    "동대구":["NAEK801","NAEK010","23:10",32], "서대구":["NAEK805","NAEK010","23:10",32],
+    "구미":["NAEK810","NAEK010","20:30",18], "경주":["NAEK815","NAEK010","21:30",12],
+    "안동":["NAEK840","NAEK010","20:10",18], "영주":["NAEK835","NAEK010","20:30",13],
+    "예천":["NAEK851","NAEK010","19:00",6],  "상주":["NAEK825","NAEK010","19:40",14],
+    "점촌":["NAEK850","NAEK010","20:20",12], "영천":["NAEK845","NAEK010","18:50",4],
+    "영덕":["NAEK843","NAEK010","18:00",3],  "영해":["NAEK842","NAEK010","17:35",3],
+    "포항":["NAEK830","NAEK010","23:20",27],
+    "부산":["NAEK700","NAEK010","23:50",33], "부산서부":["NAEK703","NAEK010","18:20",5],
+    "울산":["NAEK715","NAEK010","20:00",11], "마산":["NAEK705","NAEK010","22:50",27],
+    "김해":["NAEK735","NAEK010","18:30",14], "내서":["NAEK706","NAEK010","22:50",27],
+    "창원":["NAEK710","NAEK010","23:30",28], "진주":["NAEK722","NAEK010","24:00",44],
+    "통영":["NAEK730","NAEK010","18:40",15],
+    "안성":["NAEK130","NAEK010","22:50",33], "용인":["NAEK150","NAEK010","21:00",21],
+    "이천":["NAEK160","NAEK010","22:00",20], "여주":["NAEK140","NAEK010","22:00",23],
+    "공도":["NAEK133","NAEK010","22:50",33], "평택":["NAEK180","NAEK010","22:00",62],
+    "광주":["NAEK500","NAEK021","24:00",98], "전주":["NAEK602","NAEK021","24:00",90],
+    "목포":["NAEK505","NAEK021","20:30",16], "순천":["NAEK515","NAEK021","22:00",18],
+    "여수":["NAEK510","NAEK021","21:00",16], "남원":["NAEK625","NAEK021","19:30",7],
+    "정읍":["NAEK630","NAEK021","20:00",8],  "익산":["NAEK615","NAEK021","19:00",9],
+    "군산":["NAEK610","NAEK021","22:00",51], "담양":["NAEK582","NAEK021","19:10",8],
+    "광양":["NAEK520","NAEK021","20:00",11], "순창":["NAEK645","NAEK021","15:30",5],
+    "장흥":["NAEK580","NAEK021","17:00",8],  "보성":["NAEK554","NAEK021","15:00",2],
+    "해남":["NAEK595","NAEK021","17:00",5],  "완도":["NAEK575","NAEK021","14:30",2],
+    "진도":["NAEK590","NAEK021","15:30",4],  "영광":["NAEK560","NAEK021","20:00",10],
+    "화순":["NAEK586","NAEK021","17:00",2],  "무안":["NAEK550","NAEK021","16:35",5],
+    "김제":["NAEK620","NAEK021","17:00",4],  "강진":["NAEK535","NAEK021","17:20",5],
+    "구례":["NAEK519","NAEK021","16:25",3],  "벌교":["NAEK555","NAEK021","15:40",2],
+    "영암":["NAEK570","NAEK021","16:05",2],  "함평":["NAEK581","NAEK021","14:45",2],
+    "장성":["NAEK583","NAEK021","17:40",2],  "지도":["NAEK585","NAEK021","13:55",2],
+    "당진":["NAEK312","NAEK021","22:00",48], "서산":["NAEK393","NAEK021","21:50",48],
+    "태안":["NAEK394","NAEK021","19:30",14], "보령":["NAEK395","NAEK021","21:30",19],
+    "홍성":["NAEK389","NAEK021","20:40",14], "예산":["NAEK398","NAEK021","20:55",7],
+    "안면도":["NAEK396","NAEK021","17:30",4], "논산":["NAEK370","NAEK021","20:00",13],
   };
   let liveSeq = 0; // 오래된 응답이 최신 카드를 덮어쓰지 않도록
 
@@ -1201,6 +1269,8 @@
   function updateForDateTime(){
     if(!currentPick) return;
     renderSchedule(currentPick);
+    renderReturn(currentPick);                       // 막차까지 남는 시간이 달라진다
+    $('passDaytrip').textContent = daytripLabel(currentPick);
     fetchWeather(currentPick, ++liveSeq);
   }
   $('depDate').addEventListener('change', () => {
@@ -1252,14 +1322,56 @@
     roll();
   }
 
+  // ── 돌아오는 편으로 당일치기 판정 ──
+  // 기존에는 "소요시간 150분 이하면 당일치기" 라는 추측이었다. 막차를 알면
+  // 실제로 몇 시간 머물 수 있는지 계산할 수 있다.
+  //   체류 = 서울행 막차 − 목적지 도착 시각
+  const hmToMin = hm => { const [h,m] = hm.split(':').map(Number); return h*60 + m; };
+
+  // 현지에서 쓸 수 있는 시간(분). 막차 자료가 없으면 null.
+  // 음수면 그날 막차가 이미 지난 것이라 당일 귀경이 안 된다.
+  function stayMinutes(d, hm){
+    const r = RETURN[d.n];
+    if(!r) return null;
+    const arrive = hmToMin(hm) + d.dur;        // 출발일 자정 기준 누적 분
+    // 막차는 매일 같은 시각에 있다. 도착이 자정을 넘겼으면 그 날짜의 막차와 견준다.
+    // ("24:00" 은 1440 그대로 두면 그날 자정 출발이 된다)
+    const last = hmToMin(r[2]) + Math.floor(arrive / 1440) * 1440;
+    return last - arrive;
+  }
+
+  function daytripLabel(d){
+    const stay = stayMinutes(d, depTimeVal());
+    if(stay == null){                          // 막차 자료가 없는 12곳
+      return d.dur<=150 ? "당일치기 좋아요" : d.dur<=210 ? "부지런하면 당일치기" : "1박 추천 코스";
+    }
+    if(stay < 0)  return "당일 귀경은 어려워요";
+    if(stay < 90) return "1박 추천 코스";     // 한 시간 남짓 머물자고 갈 곳은 아니다
+    if(stay < 300) return "부지런하면 당일치기";
+    return "당일치기 좋아요";
+  }
+
+  // 승차권의 "서울행 막차" 줄
+  function renderReturn(d){
+    const el = $('passReturn');
+    if(!el) return;
+    const r = RETURN[d.n];
+    if(!r){ el.hidden = true; return; }        // 역방향 자료가 없는 목적지
+    const stay = stayMinutes(d, depTimeVal());
+    const parts = [`서울행 막차 <b>${r[2]}</b>`];
+    if(stay != null && stay >= 0) parts.push(`현지에서 <b>${durText(stay)}</b>`);
+    else if(stay != null) parts.push('선택한 시각에는 당일 귀경이 어려워요');
+    parts.push(`하루 ${r[3]}편`);
+    el.innerHTML = `<span class="rbadge">돌아오는 편</span>${parts.join(' · ')}`;
+    el.hidden = false;
+  }
+
   function printPass(d){
     const seq = ++liveSeq;
     const liveEl = $('passLive'), wxEl = $('passWeather');
     if (liveEl) liveEl.hidden = true;
     if (wxEl) wxEl.hidden = true;
-    const daytrip = d.dur<=150 ? "당일치기 좋아요"
-                  : d.dur<=210 ? "부지런하면 당일치기"
-                  : "1박 추천 코스";
+    const daytrip = daytripLabel(d);
     $('passPlace').textContent = d.n;
     $('passFrom').textContent = "SEOUL · " + TERM_LABEL[d.t];
     $('passRegionCode').textContent = REGION_CODE[d.r] || "DEST";
@@ -1269,6 +1381,7 @@
     $('passRegion').textContent = d.r;
     $('passDaytrip').textContent = daytrip;
     renderSchedule(d);
+    renderReturn(d);
     $('stubPrice').textContent = won(d.fare);
     $('stubDur').textContent = durText(d.dur);
     $('passNo').textContent = "NO. " + String(Math.floor(Math.random()*900000)+100000);

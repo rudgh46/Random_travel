@@ -86,7 +86,8 @@ function load() {
   const src = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
   const d = {};
   for (const name of ['DEST', 'TERM_LABEL', 'REGION_CODE', 'REGION_VIBE', 'SPOTS',
-    'COORD', 'DEP_ID', 'DEP_HINT', 'TAGO_ARR_ID', 'TAGO_ARR', 'SEASIDE', 'SEARCH_CITY']) {
+    'COORD', 'DEP_ID', 'DEP_HINT', 'TAGO_ARR_ID', 'TAGO_ARR', 'SEASIDE', 'SEARCH_CITY',
+    'RETURN']) {
     d[name] = evalDecl(src, name);
   }
   return d;
@@ -145,28 +146,58 @@ const siteFooter = `<footer class="foot">
   <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener">자세히</a></p>
 </footer>`;
 
-// 목적지 소개 문단. 요금·소요시간을 문장으로 한 번 더 풀어 준다
+const hmToMin = hm => { const [h, m] = hm.split(':').map(Number); return h * 60 + m; };
+
+// 아침 9시 출발 기준으로 현지에서 쓸 수 있는 시간(분). 막차 자료가 없으면 null.
+// 검색으로 들어온 사람은 아직 시각을 고르지 않았으므로 대표 시각으로 계산한다.
+const REF_DEP = '09:00';
+function stayAt(d, D, hm = REF_DEP) {
+  const r = D.RETURN[d.n];
+  if (!r) return null;
+  const arrive = hmToMin(hm) + d.dur;
+  return hmToMin(r[2]) + Math.floor(arrive / 1440) * 1440 - arrive;
+}
+
+// 목적지 소개 문단. 요금·소요시간·막차를 문장으로 풀어 준다
 // (표만 있으면 검색 결과에 쓸 만한 문장이 없다).
 function intro(d, D) {
   const n = d.n, s = [];
   s.push(`${DEPART[d.t]}에서 ${n}까지는 ${d.grade} 기준 편도 ${won(d.fare)},`
     + ` 약 ${durText(d.dur)} 걸립니다.`);
-  if (d.dur <= 150) s.push(`${josa(n, '은/는')} 당일치기로 다녀오기 좋은 거리입니다.`);
-  else if (d.dur <= 210) s.push('아침 일찍 나서면 당일치기도 되지만, 여유 있게 보려면 1박이 편합니다.');
-  else s.push(`편도만 ${durText(d.dur)}이라 1박 일정을 권합니다.`);
+
+  const r = D.RETURN[n], stay = stayAt(d, D);
+  if (r && stay != null) {
+    s.push(`서울로 돌아오는 막차는 ${r[2]}이라, 오전 ${REF_DEP}에 출발하면`
+      + (stay >= 90 ? ` 현지에서 ${durText(stay)} 정도 머물 수 있습니다.`
+        : ` 머물 수 있는 시간이 ${durText(Math.max(stay, 0))}뿐이라 1박 일정이 낫습니다.`));
+  } else if (d.dur <= 150) {
+    s.push(`${josa(n, '은/는')} 당일치기로 다녀오기 좋은 거리입니다.`);
+  } else if (d.dur <= 210) {
+    s.push('아침 일찍 나서면 당일치기도 되지만, 여유 있게 보려면 1박이 편합니다.');
+  } else {
+    s.push(`편도만 ${durText(d.dur)}이라 1박 일정을 권합니다.`);
+  }
+
   if (D.SEASIDE.has(n)) s.push('바다를 끼고 있어 해안 산책이나 회 한 상 코스를 넣기 좋습니다.');
   else s.push(`${D.REGION_VIBE[d.r]}으로 묶이는 ${d.r} 권역입니다.`);
   return s.join(' ');
 }
 
 function factList(d, D) {
-  const daytrip = d.dur <= 150 ? '당일치기 좋아요'
-    : d.dur <= 210 ? '부지런하면 당일치기' : '1박 추천';
+  // 막차를 알면 실제 체류 시간으로 판정한다. 자료가 없는 곳만 소요시간으로 어림한다.
+  const stay = stayAt(d, D);
+  const daytrip = stay == null
+    ? (d.dur <= 150 ? '당일치기 좋아요' : d.dur <= 210 ? '부지런하면 당일치기' : '1박 추천')
+    : stay < 0 ? '당일 귀경 어려움'
+      : stay < 90 ? '1박 추천'
+        : stay < 300 ? '부지런하면 당일치기' : '당일치기 좋아요';
+  const r = D.RETURN[d.n];
   const rows = [
     ['출발', DEPART[d.t]],
     ['도착', d.n],
     ['예상 요금', `${won(d.fare)} <small>/ ${esc(d.grade)}</small>`],
     ['소요시간', durText(d.dur)],
+    ['서울행 막차', r ? `${esc(r[2])} <small>/ 하루 ${r[3]}편</small>` : '자료 없음'],
     ['권역', `${esc(d.r)} · ${esc(D.REGION_VIBE[d.r] || '')}`],
     ['일정', daytrip],
   ];
@@ -178,6 +209,32 @@ function factList(d, D) {
 // 볼거리 데이터가 없으면 지도 검색 바로가기로 채운다(index.html 과 같은 방식).
 const FALLBACK = [['관광지', '가볼 만한 곳 둘러보기'], ['맛집', '현지 밥집 찾기'],
   ['카페', '쉬어 갈 곳'], ['전통시장', '장 구경']];
+
+// 서울로 돌아오는 편. 당일치기를 계획할 때 실제로 궁금한 건 이쪽이라
+// 정적 문장으로도 남겨 둔다(검색 결과에 쓰이는 건 HTML 에 있는 글자뿐이다).
+function returnSection(d, D) {
+  const r = D.RETURN[d.n];
+  if (!r) {
+    return `  <section class="block">
+    <h2>서울로 돌아오는 편</h2>
+    <p class="hint">${esc(d.n)}에서 서울로 오는 편은 전국고속버스 API 에 자료가 없습니다.
+    시외버스로 운행하는 구간일 수 있으니
+    <a href="https://www.kobus.co.kr" target="_blank" rel="noopener">코버스</a>나
+    <a href="https://txbus.t-money.co.kr" target="_blank" rel="noopener">시외버스포털</a>에서 확인하세요.</p>
+  </section>`;
+  }
+  const stay = stayAt(d, D);
+  const stayTxt = stay == null || stay < 0 ? ''
+    : ` 오전 ${REF_DEP}에 서울에서 출발하면 현지에서 <b>${durText(stay)}</b> 정도 쓸 수 있습니다.`;
+  return `  <section class="block">
+    <h2>${esc(d.n)}에서 서울 가는 막차</h2>
+    <p class="lead sm">${esc(d.n)} → ${DEPART[d.t].split('(')[0]} 막차는 <b>${esc(r[2])}</b>,
+    하루 <b>${r[3]}</b>편 운행합니다.${stayTxt}</p>
+    <div id="back" class="live loading">오늘 돌아오는 편을 불러오는 중…</div>
+    <p class="hint">막차 시각은 요일과 시기에 따라 달라집니다. 위 숫자는 조회 시점 기준이며,
+    당일 실제 배차는 아래에 표시됩니다.</p>
+  </section>`;
+}
 
 function spotsSection(d, D) {
   const city = D.SEARCH_CITY[d.n] || d.n.split('·')[0];
@@ -235,6 +292,7 @@ function destPage(d, D, all) {
 
   // 페이지 스크립트에 필요한 값만 인라인으로 넘긴다
   const c = D.COORD[d.n] || [];
+  const r = D.RETURN[d.n];
   const page = {
     n: d.n, t: d.t, dur: d.dur, sea: D.SEASIDE.has(d.n),
     lat: c[0], lon: c[1],
@@ -242,6 +300,9 @@ function destPage(d, D, all) {
     arrId: D.TAGO_ARR_ID[d.n] || null,
     depId: D.DEP_ID[d.t] || null,
     depHint: D.DEP_HINT[d.t] || '서울경부',
+    // 돌아오는 편 — 출발/도착이 뒤집힌다
+    back: r ? { depId: r[0], arrId: r[1], depHint: D.TAGO_ARR[d.n] || d.n.split('·')[0],
+      arr: r[1] === 'NAEK010' ? '서울경부' : '센트럴시티' } : null,
   };
 
   return `${head({ title, desc, url, extraLd: ld })}
@@ -257,6 +318,8 @@ ${siteHeader}
     <div id="live" class="live loading">실제 배차 정보를 불러오는 중…</div>
     <p class="hint">전국고속버스 API 는 오늘과 내일 배차만 제공합니다. 그 이후 날짜는 코버스에서 확인하세요.</p>
   </section>
+
+${returnSection(d, D)}
 
   <section class="block">
     <h2>${esc(d.n)} 날씨</h2>

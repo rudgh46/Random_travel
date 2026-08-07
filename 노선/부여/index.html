@@ -39,13 +39,22 @@
 <main>
   <p class="crumb"><a href="/">홈</a> › <a href="/노선/">노선</a> › 서울 → 부여</p>
   <h1>서울에서 부여 가는 고속버스</h1>
-  <p class="lead">서울고속버스터미널(경부·영동선)에서 부여까지는 우등 기준 편도 18,700원, 약 2시간 걸립니다. 부여는 당일치기로 다녀오기 좋은 거리입니다. 백제와 서해안으로 묶이는 충남·세종·대전 권역입니다.</p>
-  <dl class="facts"><div><dt>출발</dt><dd>서울고속버스터미널(경부·영동선)</dd></div><div><dt>도착</dt><dd>부여</dd></div><div><dt>예상 요금</dt><dd>18,700원 <small>/ 우등</small></dd></div><div><dt>소요시간</dt><dd>2시간</dd></div><div><dt>권역</dt><dd>충남·세종·대전 · 백제와 서해안</dd></div><div><dt>일정</dt><dd>당일치기 좋아요</dd></div></dl>
+  <p class="lead">서울고속버스터미널(경부·영동선)에서 부여까지는 우등 기준 편도 18,700원, 약 2시간 걸립니다. 서울로 돌아오는 막차는 16:00이라, 오전 09:00에 출발하면 현지에서 5시간 정도 머물 수 있습니다. 백제와 서해안으로 묶이는 충남·세종·대전 권역입니다.</p>
+  <dl class="facts"><div><dt>출발</dt><dd>서울고속버스터미널(경부·영동선)</dd></div><div><dt>도착</dt><dd>부여</dd></div><div><dt>예상 요금</dt><dd>18,700원 <small>/ 우등</small></dd></div><div><dt>소요시간</dt><dd>2시간</dd></div><div><dt>서울행 막차</dt><dd>16:00 <small>/ 하루 4편</small></dd></div><div><dt>권역</dt><dd>충남·세종·대전 · 백제와 서해안</dd></div><div><dt>일정</dt><dd>당일치기 좋아요</dd></div></dl>
 
   <section class="block">
     <h2>오늘 배차와 요금</h2>
     <div id="live" class="live loading">실제 배차 정보를 불러오는 중…</div>
     <p class="hint">전국고속버스 API 는 오늘과 내일 배차만 제공합니다. 그 이후 날짜는 코버스에서 확인하세요.</p>
+  </section>
+
+  <section class="block">
+    <h2>부여에서 서울 가는 막차</h2>
+    <p class="lead sm">부여 → 서울고속버스터미널 막차는 <b>16:00</b>,
+    하루 <b>4</b>편 운행합니다. 오전 09:00에 서울에서 출발하면 현지에서 <b>5시간</b> 정도 쓸 수 있습니다.</p>
+    <div id="back" class="live loading">오늘 돌아오는 편을 불러오는 중…</div>
+    <p class="hint">막차 시각은 요일과 시기에 따라 달라집니다. 위 숫자는 조회 시점 기준이며,
+    당일 실제 배차는 아래에 표시됩니다.</p>
   </section>
 
   <section class="block">
@@ -112,7 +121,7 @@
   개인을 식별할 수 있는 정보는 수집하지 않습니다.
   <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener">자세히</a></p>
 </footer>
-<script>window.RT_PAGE={"n":"부여","t":"gb","dur":120,"sea":false,"lat":36.2757,"lon":126.9098,"arr":"부여","arrId":"NAEK372","depId":"NAEK010","depHint":"서울경부"};</script>
+<script>window.RT_PAGE={"n":"부여","t":"gb","dur":120,"sea":false,"lat":36.2757,"lon":126.9098,"arr":"부여","arrId":"NAEK372","depId":"NAEK010","depHint":"서울경부","back":{"depId":"NAEK372","arrId":"NAEK010","depHint":"부여","arr":"서울경부"}};</script>
 <script src="/assets/dest.js" defer></script>
 </body>
 </html>

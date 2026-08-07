@@ -81,6 +81,39 @@ module.exports = {
     const emptyField = entries.filter(m => !m[1].trim() || !m[2].trim() || !m[3].trim());
     t.ok(emptyField.length === 0, emptyField.length ? `빈 칸이 있는 항목 ${emptyField.length}개` : '빈 칸 없음');
 
+    t.section('돌아오는 편(RETURN)');
+    // [출발터미널ID, 서울도착터미널ID, 막차, 편수]
+    const ret = [...extractBlock(src, 'RETURN')
+      .matchAll(/"([^"]+)":\["(NAEK\d+)","(NAEK\d+)","(\d{1,2}:\d{2})",(\d+)\]/g)]
+      .map(m => ({ n: m[1], depId: m[2], seoulId: m[3], last: m[4], count: +m[5] }));
+    t.info(`역방향 자료 ${ret.length}곳 / 목적지 ${dest.length}곳`);
+    t.ok(ret.length > 0 && ret.length <= dest.length, '항목 수가 목적지 수를 넘지 않는다');
+    const badRet = ret.filter(r => !names.includes(r.n));
+    t.ok(badRet.length === 0, badRet.length
+      ? `DEST 에 없는 이름: ${badRet.map(r => r.n).join(', ')}` : '모두 실제 목적지 이름');
+    const dupRet = ret.map(r => r.n).filter((n, i, a) => a.indexOf(n) !== i);
+    t.ok(dupRet.length === 0, dupRet.length ? `중복: ${dupRet.join(', ')}` : '중복 없음');
+    // 서울 쪽은 경부(NAEK010)나 센트럴시티(NAEK020/021) 중 하나여야 한다
+    const oddSeoul = ret.filter(r => !['NAEK010', 'NAEK020', 'NAEK021'].includes(r.seoulId));
+    t.ok(oddSeoul.length === 0, oddSeoul.length
+      ? `서울 터미널 ID 가 이상함: ${oddSeoul.map(r => `${r.n}=${r.seoulId}`).join(', ')}`
+      : '서울 도착 터미널이 모두 경부·센트럴시티');
+    // 시각은 24:00 까지 허용한다(자정 출발). 25:00 같은 값은 오타다.
+    const oddTime = ret.filter(r => {
+      const [h, m] = r.last.split(':').map(Number);
+      return h > 24 || m > 59 || (h === 24 && m !== 0);
+    });
+    t.ok(oddTime.length === 0, oddTime.length
+      ? `막차 시각 이상: ${oddTime.map(r => `${r.n}=${r.last}`).join(', ')}` : '막차 시각이 모두 정상 범위');
+    t.ok(ret.every(r => r.count > 0), '편수가 모두 1편 이상');
+    // 도착 터미널 ID 를 이미 아는 곳은 역방향 출발 ID 와 같아야 한다(같은 터미널이다)
+    const arrId = Object.fromEntries([...extractBlock(src, 'TAGO_ARR_ID')
+      .matchAll(/"([^"]+)":\s*"(NAEK\d+)"/g)].map(m => [m[1], m[2]]));
+    const mismatch = ret.filter(r => arrId[r.n] && arrId[r.n] !== r.depId);
+    t.ok(mismatch.length === 0, mismatch.length
+      ? `가는 편·오는 편 터미널 ID 가 다름: ${mismatch.map(r => `${r.n}(${arrId[r.n]}≠${r.depId})`).join(', ')}`
+      : '고정해 둔 터미널 ID 와 어긋나지 않는다');
+
     t.section('해안 목적지(SEASIDE)');
     const seaside = [...extractBlock(src, 'SEASIDE').matchAll(/"([^"]+)"/g)].map(m => m[1]);
     t.ok(seaside.length > 0, `해안 목적지 ${seaside.length}곳`);
