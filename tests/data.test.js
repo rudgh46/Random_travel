@@ -38,6 +38,19 @@ module.exports = {
     t.ok(noCode.length === 0, noCode.length ? `REGION_CODE 누락: ${noCode.join(', ')}` : '모든 권역에 영문 코드가 있다');
     const noVibe = regions.filter(r => !vibeKeys.includes(r));
     t.ok(noVibe.length === 0, noVibe.length ? `REGION_VIBE 누락: ${noVibe.join(', ')}` : '모든 권역에 설명이 있다');
+
+    // 선택 목록의 표시 문구는 권역 이름 그대로여야 한다.
+    // 예전에는 일부에만 설명을 붙여 놨는데, 손으로 관리하다 "수도권 · 당일치기"(목록)와
+    // "가벼운 당일치기"(REGION_VIBE)처럼 어긋났고, 이름에 · 가 든 권역은
+    // "경북 · 대구" 가 지명 나열인지 설명인지 구분되지 않았다.
+    const regionOpts = [...src.matchAll(/<option value="([^"]+)">([^<]+)<\/option>/g)]
+      .filter(m => regions.includes(m[1]));
+    t.ok(regionOpts.length === regions.length,
+      `선택 목록에 권역 ${regionOpts.length}개가 있다 (권역 ${regions.length}개)`);
+    const labelled = regionOpts.filter(m => m[1] !== m[2].trim());
+    t.ok(labelled.length === 0, labelled.length
+      ? `표시 문구가 권역 이름과 다름: ${labelled.map(m => `${m[1]}→"${m[2].trim()}"`).join(', ')}`
+      : '선택 목록이 권역 이름을 그대로 쓴다');
     const counts = regions.map(r => `${r}:${dest.filter(d => d.r === r).length}`);
     t.info(`분포 → ${counts.join('  ')}`);
     t.ok(regions.every(r => dest.filter(d => d.r === r).length >= 3), '권역마다 최소 3곳 이상이다');

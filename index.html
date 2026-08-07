@@ -425,15 +425,18 @@
       <div>
         <label for="region">권역</label>
         <select id="region">
+          <!-- 지명만 둔다. 권역 설명(REGION_VIBE)을 여기에도 적으면 두 곳을 따로
+               고치게 되고, 이름에 · 가 든 권역은 "경북 · 대구" 가 지명 나열인지
+               설명인지 구분되지 않는다. 설명은 승차권과 노선 페이지에만 쓴다. -->
           <option value="all">전체</option>
-          <option value="수도권">수도권 · 당일치기</option>
-          <option value="강원">강원 · 바다와 산</option>
-          <option value="충북">충북 · 호수와 산성</option>
-          <option value="충남·세종·대전">충남 · 세종 · 대전</option>
-          <option value="전북">전북 · 한옥과 맛</option>
-          <option value="전남·광주">전남 · 광주</option>
-          <option value="경북·대구">경북 · 대구</option>
-          <option value="경남·부산·울산">경남 · 부산 · 울산</option>
+          <option value="수도권">수도권</option>
+          <option value="강원">강원</option>
+          <option value="충북">충북</option>
+          <option value="충남·세종·대전">충남·세종·대전</option>
+          <option value="전북">전북</option>
+          <option value="전남·광주">전남·광주</option>
+          <option value="경북·대구">경북·대구</option>
+          <option value="경남·부산·울산">경남·부산·울산</option>
         </select>
       </div>
       <div>
