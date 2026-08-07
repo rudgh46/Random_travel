@@ -107,7 +107,24 @@ module.exports = {
     // 같은 페이지가 여러 주소로 색인된다
     t.ok(/<link rel="canonical" href="https:\/\/[^"?]+\/">/.test(src),
       'canonical 이 쿼리 없는 주소를 가리킨다');
+
     const fs2 = require('fs'), p2 = require('path');
     t.ok(fs2.existsSync(p2.join(require('./lib/harness').ROOT, 'og.png')), 'og.png 파일이 저장소에 있다');
+
+    t.section('방문 통계(GA4)');
+    // 측정 ID 가 index.html 과 생성기에서 갈라지면 노선 페이지만 다른 속성으로
+    // 집계되거나 아예 안 잡힌다. 한쪽만 고치는 실수가 잦아 여기서 묶어 둔다.
+    const gaMain = src.match(/gtag\/js\?id=(G-[A-Z0-9]+)/);
+    t.ok(!!gaMain, gaMain ? `측정 ID ${gaMain[1]}` : 'index.html 에 GA4 태그가 없다');
+    const builder = fs2.readFileSync(
+      p2.join(require('./lib/harness').ROOT, 'tools', 'build-pages.js'), 'utf8');
+    const gaGen = builder.match(/const GA_ID = '(G-[A-Z0-9]+)'/);
+    t.ok(!!gaGen, gaGen ? '생성기에도 측정 ID 가 있다' : 'tools/build-pages.js 에 GA_ID 가 없다');
+    t.ok(gaMain && gaGen && gaMain[1] === gaGen[1],
+      '메인과 노선 페이지가 같은 측정 ID 를 쓴다');
+    t.ok(/<script async src="https:\/\/www\.googletagmanager\.com/.test(src),
+      'GA 스크립트가 async 다 (늦거나 차단돼도 페이지가 뜬다)');
+    t.ok(/Google Analytics를 사용하며/.test(src),
+      '쿠키 사용 안내가 하단에 있다');
   },
 };

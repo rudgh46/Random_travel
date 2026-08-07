@@ -23,6 +23,15 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚌</text></svg>">
+<!-- Google Analytics 4. async 라서 이 스크립트가 늦거나 차단돼도 페이지는 그대로 뜬다.
+     측정 ID 를 바꿀 때는 tools/build-pages.js 의 GA_ID 도 함께 고쳐야 한다. -->
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-KTR9CLKBJZ"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'G-KTR9CLKBJZ');
+</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gothic+A1:wght@400;500;700;900&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -519,6 +528,9 @@
     요금은 우등 기준 편도 예상값이며 날짜·좌석 등급에 따라 달라집니다.
     실제 출발편·잔여석은 <a href="https://www.kobus.co.kr" target="_blank" rel="noopener">코버스</a>에서 확인하세요.
     날씨는 <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> 자료입니다.
+    <br>이 사이트는 방문 통계 확인을 위해 Google Analytics를 사용하며, 이 과정에서 쿠키가 사용됩니다.
+    개인을 식별할 수 있는 정보는 수집하지 않습니다.
+    <a href="https://policies.google.com/technologies/partner-sites" target="_blank" rel="noopener">자세히</a>
   </footer>
 
 <script>
