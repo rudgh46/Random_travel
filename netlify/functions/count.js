@@ -25,12 +25,13 @@ const SHOW_FROM = 100;
 const THROTTLE_SEC = 2;                // 같은 IP 의 연속 기록 최소 간격
 const NAME_MAX = 20;
 
+// 같은 출처에서만 쓴다. * 로 열면 남의 사이트가 집계를 부풀리거나
+// 저장소 무료 한도(하루 1만 명령)를 소진시킬 수 있다.
 const json = (statusCode, body) => ({
   statusCode,
   headers: {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "no-store",
-    "Access-Control-Allow-Origin": "*",
   },
   body: JSON.stringify(body),
 });
@@ -80,9 +81,6 @@ exports.handler = async (event) => {
   if (!url || !token) return json(200, { enabled: false });
 
   const method = (event.httpMethod || "GET").toUpperCase();
-  if (method === "OPTIONS") {
-    return { statusCode: 204, headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "GET,POST", "Access-Control-Allow-Headers": "Content-Type" }, body: "" };
-  }
 
   try {
     // 조회만

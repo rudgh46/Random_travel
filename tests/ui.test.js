@@ -2,6 +2,16 @@
 // 네트워크(날씨)는 이 파일에서 차단해서, 날씨와 무관하게 UI 동작만 본다.
 const { weatherReady, landed } = require('./lib/harness');
 
+// 날짜는 오늘 기준으로 만든다. 박아 두면 그 날이 오는 순간 테스트만 깨진다
+// (schedule.test.js 에서 실제로 겪었다).
+const FUTURE = (() => {
+  const d = new Date();
+  d.setHours(12, 0, 0, 0);
+  d.setDate(d.getDate() + 3);
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+})();
+
 module.exports = {
   name: 'UI · 공유 · 접근성',
   needsBrowser: true,
@@ -117,7 +127,7 @@ module.exports = {
     const pr = await ctx.newPage();
     watch(pr);
     const seePass = async (to, hm) => {
-      await pr.goto(`${url}?to=${encodeURIComponent(to)}&d=2026-08-10&t=${encodeURIComponent(hm)}`);
+      await pr.goto(`${url}?to=${encodeURIComponent(to)}&d=${FUTURE}&t=${encodeURIComponent(hm)}`);
       await pr.waitForSelector('#passWrap.show');
       await pr.waitForTimeout(150);
       return pr.evaluate(() => ({
@@ -157,7 +167,7 @@ module.exports = {
     t.info(`동송 20:00 → ${after}`);
     t.ok(await pr.isVisible('#passWrap'), '시각을 바꿔도 승차권이 유지된다');
 
-    await pr.goto(`${url}?to=${encodeURIComponent('완도')}&d=2026-08-10&t=06:00`);
+    await pr.goto(`${url}?to=${encodeURIComponent('완도')}&d=${FUTURE}&t=06:00`);
     await pr.waitForSelector('#passWrap.show');
     await pr.fill('#depTime', '13:00');
     await pr.dispatchEvent('#depTime', 'change');

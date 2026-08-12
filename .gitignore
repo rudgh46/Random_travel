@@ -1,0 +1,16 @@
+# 이 저장소는 공개입니다. 비밀값이 실수로 커밋되지 않도록 막아 둡니다.
+# 인증키는 Netlify 환경변수(TAGO_KEY, UPSTASH_*)로만 넣고 파일에 두지 마세요.
+.env
+.env.*
+*.local
+secrets.json
+
+node_modules/
+.netlify/
+
+# 편집기·OS 부산물
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

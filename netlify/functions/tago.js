@@ -1,43 +1,24 @@
 // Netlify Function: TAGO 고속버스정보 프록시
-// - API 키(TAGO_KEY)는 서버에만 두고, 브라우저에는 절대 노출하지 않는다.
-// - 기본은 "통과(passthrough)" 프록시: ?op=<오퍼레이션명>&<그 외 파라미터>
-// - 편의 모드:
-//     ?mode=terminals                        → 터미널 목록(디스커버리용)
-//     ?mode=route&depHint=서울&arr=목포&date=YYYYMMDD
-//                                            → 이름으로 터미널 ID를 찾아 운행정보 조회
 //
-// TAGO 고속버스정보 서비스 기본 URL (data.go.kr 15098522)
-//   http://apis.data.go.kr/1613000/ExpBusInfoService/<operation>
-// 대표 오퍼레이션(계정 화면의 "활용신청 상세"에서 정확한 이름 확인 가능):
-//   getExpBusTrminlList              고속버스 터미널 목록
-//   getStrtpntAlocFndExpbusInfo      출/도착지 기반 고속버스 운행정보
-//   getExpBusGradList                고속버스 등급 목록
-//   getCtyCodeList                   도시코드 목록
+// API 키(TAGO_KEY)는 서버에만 두고 브라우저로는 절대 내려보내지 않는다.
+// 저장소가 공개이므로, 키를 드러낼 수 있는 경로는 아예 만들지 않는다 —
+// 응답에 요청 URL 을 담거나 키 일부를 알려 주는 진단 기능도 두지 않는다.
+//
+// 지원하는 두 가지 모드뿐이다. 임의 오퍼레이션을 대신 호출해 주는 통과
+// 프록시는 두지 않는다(우리 키로 아무 조회나 하게 되어 일일 할당량이 소진된다).
+//
+//     ?mode=terminals&q=센트럴                  터미널 이름 검색
+//     ?mode=route&depHint=서울경부&arr=목포&date=YYYYMMDD
+//                                              이름 또는 ID 로 운행정보 조회
+//
+// 서비스 기본 URL (data.go.kr 15098522)
+//   https://apis.data.go.kr/1613000/ExpBusInfo/<Operation>
+// 오퍼레이션 이름은 첫 글자가 대문자다. 구 경로(ExpBusInfoService/getXxx)는
+// 폐기되어 NO_OPENAPI_SERVICE 를 반환한다.
 
 const SERVICE_BASE = "https://apis.data.go.kr/1613000/ExpBusInfo";
 const OP_TERMINALS = "GetExpBusTrminlList";
 const OP_ROUTE = "GetStrtpntAlocFndExpbusInfo";
-
-// probe 모드에서 시험할 서비스/오퍼레이션 후보 (계정마다 철자가 다를 수 있어 자동 탐색)
-const PROBE_BASES = [
-  "https://apis.data.go.kr/1613000/ExpBusInfo",
-  "https://apis.data.go.kr/1613000/ExpBusInfoService",
-];
-const PROBE_OPS = [
-  "getExpBusTrminlList",
-  "getExpBusTmnList",
-  "getExpBusTerminalList",
-  "getExpBusTrminl",
-];
-
-// 인증키 정규화: 이미 인코딩된(Encoding) 키(%2B 등)는 한번 디코딩해서
-// URLSearchParams가 이중 인코딩(%252B)하지 않도록 한다.
-function normalizeKey(key) {
-  if (key && key.includes("%")) {
-    try { return decodeURIComponent(key); } catch { return key; }
-  }
-  return key;
-}
 
 // 게이트웨이는 "인코딩 키"(%2B... 형태)만 인식한다.
 // 환경변수에 디코딩 키(+, /, = 원문)를 넣었거나 앞뒤 공백/줄바꿈이 섞여도 동작하게 보정.
@@ -55,20 +36,13 @@ const MAX_DEP_CANDS = 3;
 const MAX_ARR_CANDS = 4;
 const MAX_ROUTE_TRIES = 8;
 
-// 허용 오퍼레이션 화이트리스트 (임의 URL 프록시 남용 방지)
-const ALLOWED_OPS = new Set([
-  OP_TERMINALS,
-  OP_ROUTE,
-  "GetExpBusGradList",
-  "GetCtyCodeList",
-]);
-
+// 같은 출처(사이트 자신)에서만 호출한다. * 로 열어 둘 이유가 없다 —
+// 남의 사이트가 이 프록시를 가져다 쓰면 우리 API 일일 할당량이 소진된다.
 const json = (statusCode, body) => ({
   statusCode,
   headers: {
     "Content-Type": "application/json; charset=utf-8",
     "Cache-Control": "public, max-age=60",
-    "Access-Control-Allow-Origin": "*",
   },
   body: JSON.stringify(body),
 });
@@ -190,91 +164,16 @@ exports.handler = async (event) => {
   const p = event.queryStringParameters || {};
 
   try {
-    // ── 진단: 함수가 만드는 실제 요청 URL을 그대로 반환(브라우저 비교용) ──
-    if (p.showurl === "1") {
-      const op = p.op || OP_TERMINALS;
-      const { showurl: _s, op: _o, mode: _m, ...extra } = p;
-      const fullUrl = buildUrl(SERVICE_BASE, op, key, {
-        _type: "json",
-        numOfRows: p.numOfRows || "10",
-        pageNo: "1",
-        ...extra,
-      });
-      return json(200, { note: "이 URL을 브라우저 주소창에 그대로 붙여 결과를 비교하세요.", fullUrl });
-    }
+    // 진단 기능(showurl·keycheck·probe·debug)은 제거했습니다.
+    //
+    // 2026-08-03~04 API 장애를 추적하려고 넣었던 것인데, 그중 showurl 은
+    // 인증키가 붙은 요청 URL 을 그대로 돌려주었습니다. 저장소가 공개라
+    // 누구나 그 기능이 있다는 걸 알 수 있어, 사실상 키를 공개해 둔 셈이었습니다.
+    //
+    // 진단이 다시 필요하면 로컬에서 함수를 직접 호출하십시오
+    // (tests/lib/harness.js 의 startServer({withFunction:true}) 참고).
+    // 배포되는 코드에는 키를 드러내는 경로를 두지 않습니다.
 
-    // ── 키 점검: 값은 노출하지 않고 존재/길이/형태만 ──
-    if (p.keycheck === "1") {
-      const nk = normalizeKey(rawKey);
-      return json(200, {
-        hasKey: !!rawKey,
-        rawLen: rawKey.length,
-        normLen: nk ? nk.length : 0,
-        sentLen: key.length,              // 실제로 URL에 붙는 길이
-        rawHasPercent: rawKey.includes("%"),
-        rawHasWhitespace: /\s/.test(rawKey), // 환경변수에 줄바꿈/공백이 섞였는지
-        head: rawKey.slice(0, 4),
-        tail: rawKey.slice(-4),
-      });
-    }
-    // ── 탐색 모드: 서비스/오퍼레이션 후보를 자동 시험 ──
-    if (p.probe === "1") {
-      const results = [];
-      for (const base of PROBE_BASES) {
-        for (const op of PROBE_OPS) {
-          const url = buildUrl(base, op, key, { _type: "json", numOfRows: "1", pageNo: "1" });
-          const ctrl = new AbortController();
-          const timer = setTimeout(() => ctrl.abort(), 6000);
-          let note;
-          try {
-            const r = await fetch(url, { signal: ctrl.signal });
-            const t = await r.text();
-            let code = null, msg = null;
-            try {
-              const j = JSON.parse(t);
-              const h = (j?.response ?? j)?.header;
-              code = h?.resultCode ?? null;
-              msg = h?.resultMsg ?? null;
-            } catch {
-              const m1 = t.match(/returnReasonCode>?\"?:?\s*\"?(\d+)/);
-              const m2 = t.match(/(errMsg|returnAuthMsg)\"?:?\s*\"?([^\"<]+)/);
-              code = m1 ? m1[1] : "?";
-              msg = m2 ? m2[2] : t.slice(0, 80);
-            }
-            note = { ok: code === "00", code, msg };
-          } catch (e) {
-            note = { ok: false, code: e.name, msg: e.message };
-          } finally {
-            clearTimeout(timer);
-          }
-          results.push({ base: base.replace("https://apis.data.go.kr/1613000/", ""), op, ...note });
-        }
-      }
-      const hit = results.find((r) => r.ok);
-      return json(200, { hit: hit || null, results });
-    }
-
-    // ── 진단 모드: TAGO 원본 응답을 그대로 반환 ──
-    if (p.debug === "1") {
-      const op = p.op || OP_TERMINALS;
-      const { debug: _d, op: _o, mode: _m, ...extra } = p;
-      const url = buildUrl(SERVICE_BASE, op, key, {
-        _type: "json",
-        numOfRows: p.numOfRows || "10",
-        pageNo: "1",
-        ...extra,
-      });
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 8000);
-      let raw;
-      try {
-        const r = await fetch(url, { signal: ctrl.signal });
-        raw = await r.text();
-      } finally {
-        clearTimeout(timer);
-      }
-      return json(200, { op, sentUrlMasked: url.replace(key, "***KEY***"), raw: raw.slice(0, 1500) });
-    }
     // ── 편의 모드: 터미널 검색 (terminalNm 필수) ──
     if (p.mode === "terminals") {
       const nm = (p.q || p.terminalNm || "").trim();
@@ -362,18 +261,14 @@ exports.handler = async (event) => {
       });
     }
 
-    // ── 기본: 통과 프록시 ──
-    const op = p.op;
-    if (!op || !ALLOWED_OPS.has(op)) {
-      return json(400, {
-        error: "허용되지 않은 op 입니다.",
-        allowed: [...ALLOWED_OPS],
-      });
-    }
-    const { op: _omit, mode: _m, ...rest } = p;
-    const items = await callTago(op, rest, key);
-    return json(200, { count: items.length, items });
+    // 통과 프록시(?op=...)도 제거했습니다. 프론트엔드는 mode=route 만 쓰고
+    // 터미널 탐색은 mode=terminals 로 됩니다. 임의 오퍼레이션을 열어 두면
+    // 우리 인증키로 아무 조회나 할 수 있어 일일 할당량이 소진될 수 있습니다.
+    return json(400, { error: "mode=route 또는 mode=terminals 를 사용하세요." });
   } catch (err) {
-    return json(502, { error: err.message, code: err.code, raw: err.raw });
+    // 오류 본문에 요청 URL 이 섞여 들어올 수 있으므로 키를 지운다.
+    // (게이트웨이가 XML 오류를 돌려줄 때 원문을 그대로 담는 경로가 있다)
+    const scrub = (v) => (typeof v === "string" ? v.split(key).join("***") : v);
+    return json(502, { error: scrub(err.message), code: err.code, raw: scrub(err.raw) });
   }
 };
