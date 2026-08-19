@@ -142,8 +142,10 @@
   .region-tag.show{opacity:1}
 
   /* ---- controls ---- */
+  /* minmax(0,1fr) 이 아니면 트랙이 자식의 min-content 폭까지 늘어난다.
+     iOS Safari 의 select·날짜 입력은 고유 폭이 커서 칸마다 너비가 달라진다. */
   .filters{
-    display:grid;grid-template-columns:repeat(4,1fr);gap:12px;
+    display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;
     margin:22px 0 6px;
   }
   .filters label{
@@ -151,7 +153,7 @@
     letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;
   }
   select{
-    width:100%;appearance:none;-webkit-appearance:none;
+    width:100%;min-width:0;appearance:none;-webkit-appearance:none;
     background:var(--ink) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' fill='none' stroke='%237d879c' stroke-width='1.6'><path d='M2 4l4 4 4-4'/></svg>") no-repeat right 12px center;
     color:var(--road);border:1px solid #2a3348;border-radius:11px;
     padding:11px 34px 11px 13px;font-family:'Gothic A1',sans-serif;font-size:14px;font-weight:500;
@@ -161,18 +163,30 @@
   select:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-color:var(--amber)}
 
   /* ---- 출발 일시 ---- */
-  .depart{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:16px}
+  .depart{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-top:16px}
   .depart label{
     display:block;font-family:'Space Mono',monospace;font-size:10.5px;
     letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:7px;
   }
+  /* iOS Safari 의 날짜·시각 입력은 "오후 3:30" 을 다 담을 만큼의 고유 최소 폭을
+     갖는다. 그 폭이 칸보다 크면 1fr 트랙이 끌려 늘어나서 옆 칸과 오른쪽 끝이
+     어긋나고 카드 밖으로 넘친다. min-width:0 + max-width:100% 로 칸에 가둔다.
+     (-webkit-appearance:none 은 일부 iOS 에서 값 표시가 사라져 쓰지 않는다.)
+     데스크톱 Chromium·WebKit 에서는 재현되지 않아 실기 확인이 필요한 수정이다. */
   .depart input{
-    width:100%;background:var(--ink);color:var(--road);
+    width:100%;min-width:0;max-width:100%;
+    background:var(--ink);color:var(--road);
     border:1px solid #2a3348;border-radius:11px;
-    padding:10px 13px;font-family:'Gothic A1',sans-serif;font-size:14px;font-weight:500;
+    padding:11px 13px;font-family:'Gothic A1',sans-serif;font-size:14px;font-weight:500;
     color-scheme:dark;                      /* 날짜·시각 피커도 어두운 테마로 */
     transition:border-color .15s;
   }
+  /* 위 select 줄과 높이·정렬을 맞춘다 */
+  select, .depart input{min-height:43px;line-height:1.35}
+  /* iOS 는 값을 가운데 정렬하고 좌우 여백을 넣는다 — 왼쪽으로 붙인다 */
+  .depart input::-webkit-date-and-time-value{text-align:left;margin:0}
+  .depart input::-webkit-datetime-edit{padding:0}
+  .depart input::-webkit-calendar-picker-indicator{opacity:.55;cursor:pointer}
   .depart input:hover{border-color:#3a4560}
   .depart input:focus-visible{outline:2px solid var(--amber);outline-offset:2px;border-color:var(--amber)}
   .depart .note{grid-column:1/-1;font-size:11.5px;color:var(--muted);line-height:1.5}

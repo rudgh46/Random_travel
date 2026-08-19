@@ -257,6 +257,26 @@ module.exports = {
     const overflow = await mob.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
     t.ok(!overflow, '모바일 390px 에서 가로 스크롤이 없다');
 
+    // 출발일·출발 시각은 네이티브 위젯이라 브라우저마다 고유 폭이 다르다.
+    // iOS Safari 에서 이 폭에 트랙이 끌려가 오른쪽 끝이 어긋난 적이 있어
+    // (사용자 iPhone 스크린샷) 정렬을 못박아 둔다. 이 검사는 Chromium 기준이라
+    // iOS 버그 자체를 재현하지는 못하지만, 정렬 규칙이 지워지는 것은 잡는다.
+    const align = await mob.evaluate(() => {
+      const r = id => document.getElementById(id).getBoundingClientRect();
+      const round = n => Math.round(n);
+      return {
+        termL: round(r('term').left),   dateL: round(r('depDate').left),
+        regR:  round(r('region').right), timeR: round(r('depTime').right),
+        dateW: round(r('depDate').width), timeW: round(r('depTime').width),
+        board: round(document.querySelector('.board').getBoundingClientRect().right),
+      };
+    });
+    t.info(`정렬: 날짜 left=${align.dateL}(선택 ${align.termL}) · 시각 right=${align.timeR}(선택 ${align.regR})`);
+    t.ok(align.dateL === align.termL, '출발일 왼쪽 끝이 위 선택칸과 맞는다');
+    t.ok(align.timeR === align.regR, '출발 시각 오른쪽 끝이 위 선택칸과 맞는다');
+    t.ok(Math.abs(align.dateW - align.timeW) <= 1, '두 칸의 폭이 같다');
+    t.ok(align.timeR <= align.board, '출발 시각이 안내판 밖으로 넘치지 않는다');
+
     t.ok(errs.length === 0, errs.length ? `런타임 에러: ${errs.join(' | ')}` : '런타임 에러 없음');
     await ctx.close(); await ctx2.close();
   },

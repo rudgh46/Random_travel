@@ -117,24 +117,20 @@ module.exports = {
     t.ok((await p.textContent('#wxStatus')).includes(D5.ko), `날짜를 바꾸면 그 날짜로 다시 걸러낸다 (${D5.ko})`);
     t.ok(calls - c1 >= 1, `새 날짜는 새로 조회한다 (요청 ${calls - c1}회)`);
 
-    // 전국에 비가 오는 날이면 후보가 0곳이 된다. 그것도 정상 동작이므로
-    // 뽑기 검사는 후보가 남아 있을 때만 한다(실제로 99곳 전부 제외된 날이 있었다).
+    // 확인하려는 규칙은 "비 예보 지역이 후보에서 빠진다" 다. 예전에는 spin() 을
+    // 여러 번 불러 결과를 표본으로 봤는데, 롤링 중에는 두 번째 호출부터 무시되고
+    // 지명 칸에는 이전 결과가 남아서 엉뚱한 값을 검사하고 있었다.
+    // 후보 목록을 직접 보는 편이 결정적이고 규칙에도 정확히 맞는다.
     const verify = await p.evaluate(() => {
       const iso = depDateVal();
-      const wet = DEST.filter(d => !isDry(d, iso)).map(d => d.n);
-      const left = DEST.length - wet.length;
-      const picked = [];
-      if (left > 0) {
-        for (let i = 0; i < 8; i++) { spin(); picked.push(document.getElementById('flap').textContent.trim()); }
-      }
-      return { wet: wet.length, left, bad: picked.filter(x => wet.includes(x)) };
+      const wet = new Set(DEST.filter(d => !isDry(d, iso)).map(d => d.n));
+      const cands = pool().map(d => d.n);
+      return { wet: wet.size, left: cands.length, bad: cands.filter(n => wet.has(n)) };
     });
-    t.info(`비 예보 ${verify.wet}곳 / 남은 후보 ${verify.left}곳`);
-    if (verify.left === 0) {
-      t.ok(true, '전국에 비 예보인 날은 후보가 0곳이 된다 (정상 동작, 뽑기 검사는 건너뜀)');
-    } else {
-      t.ok(verify.bad.length === 0, `뽑힌 곳에 비 예보 지역이 없다 (비 ${verify.wet}곳)`);
-    }
+    t.info(`비 예보 ${verify.wet}곳 / 필터까지 적용한 후보 ${verify.left}곳`);
+    t.ok(verify.bad.length === 0, verify.bad.length
+      ? `후보에 비 예보 지역이 섞여 있다: ${verify.bad.join(', ')}`
+      : `후보에 비 예보 지역이 없다 (비 ${verify.wet}곳 제외, 후보 ${verify.left}곳)`);
 
     t.section('링크에 일시 포함·복원');
     await p.uncheck('#dryOnly');
